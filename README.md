@@ -22,6 +22,14 @@ A desktop network monitoring and device discovery tool built with Python and Cus
 
 Python 3.10 or newer is recommended. CustomTkinter provides the modern dark/light interface, while the device table uses a themed `ttk.Treeview`. Tkinter is included with the official macOS Python installer; Linux users may need their distribution's `python3-tk` package.
 
+On macOS with Homebrew Python, install the matching Tk runtime before creating the environment:
+
+```bash
+brew install python-tk@3.14
+```
+
+Use a regular macOS Terminal or VS Code external terminal to launch the GUI. Sandboxed command runners may import Tkinter but cannot connect to the macOS window server.
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
@@ -55,7 +63,7 @@ At startup the app checks the current privilege level. Without administrator/roo
 
 ## New-device alerts
 
-`notifications.py` uses Plyer for native desktop notifications. The first completed scan establishes the baseline and does not alert. Later scans compare known, non-`Unknown` MAC addresses with the previous scan; each new MAC triggers `New Device Detected: [hostname]`, falling back to the IP address when hostname resolution is unavailable. If Plyer is unavailable or the operating system rejects the notification, scanning continues normally without crashing.
+`notifications.py` uses Plyer for native desktop notifications and falls back to macOS `osascript` when Plyer cannot load its optional Objective-C bridge. The first completed scan establishes the baseline and does not alert. Later scans compare known, non-`Unknown` MAC addresses with the previous scan; each new MAC triggers `New Device Detected: [hostname]`, falling back to the IP address when hostname resolution is unavailable. If notification support is unavailable, scanning continues normally without crashing.
 
 ## Device port checks
 
