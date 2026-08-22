@@ -2,9 +2,6 @@
 
 A desktop network monitoring and device discovery tool built with Python and CustomTkinter. It detects the local IPv4 subnet, scans the LAN in a background thread, displays active devices, preserves disconnected devices as `Offline`, reports join/leave changes, and exports the current device table to CSV.
 
-## Project Website
-
-Visit the [LAN Watchtower project website](https://laksh1357.github.io/NetworkMonitoring_DeviceDiscovery_Tool/) for an overview of the network detection workflow and capabilities.
 
 ## Project structure
 
