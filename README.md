@@ -2,12 +2,6 @@
 
 A desktop network monitoring and device discovery tool built with Python and CustomTkinter. It detects the local IPv4 subnet, scans the LAN in a background thread, displays active devices, preserves disconnected devices as `Offline`, reports join/leave changes, and exports the current device table to CSV.
 
-## Web Console
-
-The related Atlas web console is available in the [AI_PROJECT repository](https://github.com/laksh1357/AI_PROJECT). When running locally, open [http://127.0.0.1:8000](http://127.0.0.1:8000) and its [API documentation](http://127.0.0.1:8000/docs).
-
-The web console is a separate FastAPI application and is not the CustomTkinter desktop interface in this repository.
-
 ## Project structure
 
 ```text
