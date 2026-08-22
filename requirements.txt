@@ -1,0 +1,4 @@
+# Optional: enables Layer-2 ARP discovery and MAC addresses on supported systems.
+scapy>=2.5.0
+customtkinter>=5.2.2
+plyer>=2.1.0
