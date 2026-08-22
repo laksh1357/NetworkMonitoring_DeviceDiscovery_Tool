@@ -3,3 +3,5 @@ __pycache__/
 .pytest_cache/
 *.py[cod]
 .DS_Store
+network_logs.db-wal
+network_logs.db-shm
