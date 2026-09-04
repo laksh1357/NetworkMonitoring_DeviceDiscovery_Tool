@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  lan-watchtower:
+    build: .
+    container_name: lan_watchtower_noc
+    network_mode: "host" # Grants container direct access to local host network for ARP & ICMP scans
+    restart: unless-stopped
+    volumes:
+      - ./network_logs.db:/app/network_logs.db
+    environment:
+      - MAC_VENDOR_API=1

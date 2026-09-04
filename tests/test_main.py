@@ -112,11 +112,28 @@ class NetworkUtilityTests(unittest.TestCase):
         self.assertEqual({device.status for device in devices}, {"Online"})
         self.assertEqual(progress[-1], (2, 2))
 
-    @patch("notifications.notification")
-    def test_new_device_notification_uses_hostname_or_ip(self, notifier):
-        self.assertTrue(notify_new_device("192.168.1.30", "printer.local"))
-        notifier.notify.assert_called_once()
-        self.assertEqual(notifier.notify.call_args.kwargs["message"], "New Device Detected: printer.local")
+    def test_database_alerts_and_metadata_updates(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database_path = Path(directory) / "network_logs.db"
+            with NetworkDatabase(database_path) as database:
+                database.upsert_device("192.168.1.50", "AA:BB:CC:DD:EE:FF", "sw-01", "Cisco", "Switch", "Core Switch", "Rack 1")
+                database.update_device_meta("192.168.1.50", "Main Core Switch", "Rack 1 - Slot 4", "Switch")
+                devs = database.fetch_devices()
+                self.assertEqual(devs[0]["custom_name"], "Main Core Switch")
+                self.assertEqual(devs[0]["notes"], "Rack 1 - Slot 4")
+
+                alert_id = database.insert_alert("CRITICAL", "Host Down", "192.168.1.50 unreachable", "192.168.1.50")
+                alerts = database.fetch_alerts()
+                self.assertTrue(len(alerts) >= 1)
+                self.assertEqual(alerts[0]["severity"], "CRITICAL")
+                self.assertEqual(alerts[0]["title"], "Host Down")
+
+    def test_infer_device_type(self):
+        from main import infer_device_type
+        self.assertEqual(infer_device_type("192.168.1.1", "gateway", "Cisco"), "Router")
+        self.assertEqual(infer_device_type("192.168.1.10", "sw-1", "Cisco"), "Switch")
+        self.assertEqual(infer_device_type("192.168.1.20", "app-srv-01", "Dell"), "Server")
+        self.assertEqual(infer_device_type("192.168.1.50", "ap-office", "Ubiquiti"), "Access Point")
 
 
 if __name__ == "__main__":

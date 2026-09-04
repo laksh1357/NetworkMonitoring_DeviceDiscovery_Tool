@@ -53,10 +53,37 @@ class Device:
     status: str = "Offline"
     latency_ms: float | None = None
     last_seen: str = "Never"
+    device_type: str = "PC/Workstation"
+    custom_name: str = ""
+    notes: str = ""
 
     def as_row(self) -> tuple[str, str, str, str, str, str, str]:
         latency = f"{self.latency_ms:.1f} ms" if self.latency_ms is not None else "-"
-        return (self.ip, self.mac, self.vendor, self.hostname, self.status, latency, self.last_seen)
+        name_display = self.custom_name if self.custom_name else self.hostname
+        return (self.ip, self.mac, self.vendor, name_display, self.status, latency, self.last_seen)
+
+
+def infer_device_type(ip: str, hostname: str, vendor: str) -> str:
+    """Infer a friendly device type classification from IP, hostname, and vendor."""
+    ip_last = ip.split(".")[-1] if "." in ip else ""
+    hn = (hostname or "").lower()
+    vn = (vendor or "").lower()
+
+    if ip_last in ("1", "254") or "router" in hn or "gateway" in hn or "pfsense" in hn or "openwrt" in hn:
+        return "Router"
+    if "switch" in hn or hn.startswith("sw-") or hn.startswith("sw_") or ("cisco" in vn and "catalyst" in hn):
+        return "Switch"
+    if "accesspoint" in hn or hn.startswith("ap-") or hn.startswith("ap_") or " wifi" in hn or ("ubiquiti" in vn and "ap" in hn):
+        return "Access Point"
+    if "srv" in hn or "server" in hn or "nas" in hn or "backup" in hn or "db" in hn or "proxmox" in hn or "synology" in vn or "qnap" in vn:
+        return "Server"
+    if "print" in hn or "epson" in vn or "brother" in vn or "canon" in vn:
+        return "Printer"
+    if "firewall" in hn or "fortinet" in vn or "paloalto" in vn:
+        return "Firewall"
+    if "apple" in vn or "intel" in vn or "dell" in vn or "hp" in vn or "lenovo" in vn or "pc" in hn or "laptop" in hn or "macbook" in hn:
+        return "PC/Workstation"
+    return "PC/Workstation"
 
 
 def detect_local_subnet() -> ipaddress.IPv4Network:
@@ -162,13 +189,14 @@ class NetworkScanner:
         on_complete: Callable[[list[Device]], None],
         on_error: Callable[[str], None],
         on_stopped: Callable[[], None] | None = None,
+        on_device_found: Callable[[Device], None] | None = None,
     ) -> None:
         if self.running:
             return
         self._stop_event.clear()
         self._thread = threading.Thread(
             target=self._run_scan,
-            args=(subnet, on_progress, on_complete, on_error, on_stopped),
+            args=(subnet, on_progress, on_complete, on_error, on_stopped, on_device_found),
             daemon=True,
             name="network-scan",
         )
@@ -181,6 +209,7 @@ class NetworkScanner:
         on_complete: Callable[[list[Device]], None],
         on_error: Callable[[str], None],
         on_stopped: Callable[[], None] | None,
+        on_device_found: Callable[[Device], None] | None = None,
     ) -> None:
         try:
             arp_devices: dict[str, str] = {}
@@ -190,7 +219,7 @@ class NetworkScanner:
                 except Exception:
                     # Scapy raises platform-specific exceptions for missing raw-socket access.
                     self.privileged = False
-            devices = self._layered_scan(subnet, arp_devices, on_progress)
+            devices = self._layered_scan(subnet, arp_devices, on_progress, on_device_found)
             if self._stop_event.is_set():
                 if on_stopped is not None:
                     on_stopped()
@@ -220,6 +249,7 @@ class NetworkScanner:
         subnet: ipaddress.IPv4Network,
         arp_devices: dict[str, str],
         on_progress: Callable[[int, int], None],
+        on_device_found: Callable[[Device], None] | None = None,
     ) -> list[Device]:
         addresses = list(subnet.hosts())
         total = len(addresses)
@@ -247,15 +277,22 @@ class NetworkScanner:
                 on_progress(completed, total)
             if not online:
                 return None
-            return Device(
+            hn = resolve_hostname(ip)
+            vn = lookup_vendor(mac, self.oui_database, allow_api=True)
+            d_type = infer_device_type(ip, hn, vn)
+            dev = Device(
                 ip=ip,
                 mac=mac,
-                vendor=lookup_vendor(mac, self.oui_database, allow_api=True),
-                hostname=resolve_hostname(ip),
+                vendor=vn,
+                hostname=hn,
                 status="Online",
                 latency_ms=latency,
                 last_seen=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                device_type=d_type,
             )
+            if on_device_found is not None:
+                on_device_found(dev)
+            return dev
 
         def guarded_check(address: ipaddress.IPv4Address) -> Device | None:
             while not self._stop_event.is_set():
@@ -573,8 +610,18 @@ class NetworkMonitorApp(TkBase):
 
 
 def main() -> None:
-    app = NetworkMonitorApp()
-    app.mainloop()
+    import sys
+    if "--tk" in sys.argv or "--gui" in sys.argv:
+        app = NetworkMonitorApp()
+        app.mainloop()
+    else:
+        from web_server import run_server
+        server = run_server(8000, open_browser=True)
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            print("\nShutting down NOC Web Server...")
+            server.server_close()
 
 
 if __name__ == "__main__":

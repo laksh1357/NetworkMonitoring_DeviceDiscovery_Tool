@@ -20,10 +20,19 @@ COMMON_PORTS: dict[int, str] = {
     143: "IMAP",
     443: "HTTPS",
     445: "SMB",
+    1433: "MSSQL",
+    1521: "Oracle DB",
+    3306: "MySQL",
     3389: "RDP",
     5432: "PostgreSQL",
     5900: "VNC",
-    8080: "HTTP proxy/alternate HTTP",
+    6379: "Redis",
+    8080: "HTTP-Alt",
+    8443: "HTTPS-Alt",
+    9090: "Cockpit/Web",
+    9200: "Elasticsearch",
+    1883: "MQTT",
+    27017: "MongoDB",
 }
 
 

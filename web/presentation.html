@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Presentation Deck - NetMonitor NOC Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #070d16;
+      --card-bg: rgba(14, 23, 38, 0.85);
+      --border: rgba(0, 240, 255, 0.2);
+      --cyan: #00f0ff;
+      --green: #00e676;
+      --yellow: #ffb300;
+      --red: #ff3366;
+      --blue: #0077ff;
+      --purple: #8a2be2;
+      --text: #f0f6fc;
+      --muted: #8b9eb0;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', 'Outfit', sans-serif;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .slide-deck {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .slide {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      padding: 50px 80px;
+      display: none;
+      flex-direction: column;
+      justify-content: space-between;
+      background: radial-gradient(circle at top right, rgba(0, 119, 255, 0.1), transparent 50%);
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+
+    .slide.active {
+      display: flex;
+      opacity: 1;
+    }
+
+    /* Slide Content Components */
+    .slide-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 16px;
+    }
+    .slide-title { font-size: 32px; font-weight: 800; color: #fff; letter-spacing: -0.5px; }
+    .slide-subtitle { font-size: 14px; color: var(--cyan); font-family: 'JetBrains Mono', monospace; }
+
+    .slide-body {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px 0;
+    }
+
+    .slide-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      padding-top: 14px;
+    }
+
+    /* Layout Grids */
+    .grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; width: 100%; }
+    .grid-3col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; width: 100%; }
+
+    .content-box {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      backdrop-filter: blur(12px);
+    }
+    .content-box h3 { font-size: 20px; font-weight: 700; color: var(--cyan); margin-bottom: 12px; }
+    .content-box p { font-size: 14px; color: var(--muted); line-height: 1.6; margin-bottom: 12px; }
+    .content-box ul { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .content-box li { font-size: 14px; color: var(--text); display: flex; align-items: center; gap: 10px; }
+    .content-box li::before { content: '➔'; color: var(--cyan); }
+
+    /* Title Slide Special */
+    .title-slide {
+      text-align: center;
+      justify-content: center;
+      gap: 24px;
+    }
+    .title-banner {
+      font-size: 54px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #fff, var(--cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -1.5px;
+    }
+    .author-badge {
+      font-size: 18px;
+      color: var(--green);
+      font-weight: 600;
+    }
+
+    /* Controls Bar */
+    .deck-controls {
+      height: 60px;
+      background: rgba(10, 18, 30, 0.95);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 40px;
+    }
+    .btn-deck {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: #fff;
+      padding: 8px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-deck:hover { border-color: var(--cyan); color: var(--cyan); }
+  </style>
+</head>
+<body>
+
+  <div class="slide-deck">
+
+    <!-- SLIDE 1: Title -->
+    <div class="slide active title-slide">
+      <div style="margin-bottom: 20px;">
+        <span style="font-family:'JetBrains Mono'; color:var(--cyan); font-size:14px; letter-spacing:2px;">ACADEMIC & TECHNICAL PRESENTATION DECK</span>
+      </div>
+      <h1 class="title-banner">NetMonitor NOC Engine</h1>
+      <p style="font-size: 20px; color: var(--muted); max-width: 800px; margin: 0 auto;">
+        Real-Time Network Discovery, Layered Telemetry Data Fusion & Interactive Topology Auto-Synthesis Platform
+      </p>
+      <div class="author-badge">Project & Invention by: Lakshya Singh</div>
+    </div>
+
+    <!-- SLIDE 2: Problem Statement & Solution -->
+    <div class="slide">
+      <div class="slide-header">
+        <h2 class="slide-title">Problem Statement & Solution</h2>
+        <span class="slide-subtitle">02 / EXECUTIVE SUMMARY</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2col">
+          <div class="content-box">
+            <h3>⚠️ The Network Monitoring Challenge</h3>
+            <p>Modern Local Area Networks (LANs) consist of heterogeneous endpoints (IoT devices, servers, workstations, network switches, APs).</p>
+            <ul>
+              <li>Traditional ICMP pings fail when firewalls block ping packets.</li>
+              <li>Standard SNMP configurations require tedious manual setup.</li>
+              <li>Existing tools suffer from delayed UI feedback and high resource overhead.</li>
+            </ul>
+          </div>
+
+          <div class="content-box">
+            <h3>✨ The NetMonitor Solution</h3>
+            <p>A zero-dependency, local-first NOC Operational Intelligence platform that combines multi-protocol probe telemetry with instant visualization.</p>
+            <ul>
+              <li><strong>Layered Multi-Protocol Engine</strong>: ARP + ICMP + TCP Probe fallback.</li>
+              <li><strong>Auto-Topology Synthesis</strong>: Instant hierarchical node graph.</li>
+              <li><strong>Live Event Streaming</strong>: Real-time 600ms telemetry updates.</li>
+              <li><strong>Full Interactive CRUD</strong>: Add, Edit, Manage, and Delete devices.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer"><span>NetMonitor NOC Architecture Deck</span><span>Author: Lakshya Singh</span></div>
+    </div>
+
+    <!-- SLIDE 3: System Architecture -->
+    <div class="slide">
+      <div class="slide-header">
+        <h2 class="slide-title">System Architecture & Tech Stack</h2>
+        <span class="slide-subtitle">03 / TECHNICAL STACK</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-3col">
+          <div class="content-box">
+            <h3>🎨 Frontend Deck</h3>
+            <ul>
+              <li>HTML5 & CSS3 Glassmorphism System</li>
+              <li>ES6 Canvas Line & SVG Donut Engines</li>
+              <li>Dynamic Adaptive Polling (600ms)</li>
+              <li>Interactive Modal & Inspector Drawer</li>
+            </ul>
+          </div>
+
+          <div class="content-box">
+            <h3>⚡ Backend Server</h3>
+            <ul>
+              <li>Python Multithreaded REST Server</li>
+              <li>64 Concurrency Threadpool Engine</li>
+              <li>Scapy Raw Ethernet ARP Handler</li>
+              <li>Offline Local OUI Database Resolution</li>
+            </ul>
+          </div>
+
+          <div class="content-box">
+            <h3>💾 SQLite Database</h3>
+            <ul>
+              <li>SQLite WAL (Write-Ahead Logging) Mode</li>
+              <li>Parameterized SQL Security Immunity</li>
+              <li>Device Metadata & Location Tagging</li>
+              <li>Audit Trail User Activity Logs</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer"><span>NetMonitor NOC Architecture Deck</span><span>Author: Lakshya Singh</span></div>
+    </div>
+
+    <!-- SLIDE 4: How It Works -->
+    <div class="slide">
+      <div class="slide-header">
+        <h2 class="slide-title">Step-by-Step Discovery Workflow</h2>
+        <span class="slide-subtitle">04 / DISCOVERY ENGINE</span>
+      </div>
+      <div class="slide-body">
+        <div class="content-box" style="width: 100%;">
+          <h3>🔄 Layered Discovery Execution Pipeline</h3>
+          <div style="display:grid; grid-template-columns: repeat(5, 1fr); gap:16px; margin-top:20px; text-align:center;">
+            <div style="background:rgba(0,119,255,0.15); padding:16px; border-radius:10px; border:1px solid var(--blue);">
+              <h4 style="color:var(--cyan); margin-bottom:6px;">1. Subnet Lookup</h4>
+              <p style="font-size:12px;">UDP route lookup auto-detects IPv4 subnet range.</p>
+            </div>
+            <div style="background:rgba(0,240,255,0.15); padding:16px; border-radius:10px; border:1px solid var(--cyan);">
+              <h4 style="color:var(--cyan); margin-bottom:6px;">2. Multi-Probe</h4>
+              <p style="font-size:12px;">Layer-2 ARP $\rightarrow$ Layer-3 ICMP $\rightarrow$ Layer-4 TCP 80/445 probes.</p>
+            </div>
+            <div style="background:rgba(138,43,226,0.15); padding:16px; border-radius:10px; border:1px solid var(--purple);">
+              <h4 style="color:var(--purple); margin-bottom:6px;">3. Classification</h4>
+              <p style="font-size:12px;">MAC OUI + Hostname semantics infer device category.</p>
+            </div>
+            <div style="background:rgba(0,230,118,0.15); padding:16px; border-radius:10px; border:1px solid var(--green);">
+              <h4 style="color:var(--green); margin-bottom:6px;">4. Live Streaming</h4>
+              <p style="font-size:12px;">Immediate event callbacks update UI on-the-fly.</p>
+            </div>
+            <div style="background:rgba(255,179,0,0.15); padding:16px; border-radius:10px; border:1px solid var(--yellow);">
+              <h4 style="color:var(--yellow); margin-bottom:6px;">5. SQLite Audit</h4>
+              <p style="font-size:12px;">Devices, scan totals, & alert events persisted to DB.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer"><span>NetMonitor NOC Architecture Deck</span><span>Author: Lakshya Singh</span></div>
+    </div>
+
+    <!-- SLIDE 5: Patent Innovations -->
+    <div class="slide">
+      <div class="slide-header">
+        <h2 class="slide-title">Novelty & Patentable Innovations</h2>
+        <span class="slide-subtitle">05 / INTELLECTUAL PROPERTY</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2col">
+          <div class="content-box">
+            <h3>Claim 1: Multi-Protocol Data Fusion Fallback</h3>
+            <p>Layered evaluation model (ARP + ICMP + TCP) eliminates false offline status when host firewalls block ping requests.</p>
+          </div>
+          <div class="content-box">
+            <h3>Claim 2: Topology Auto-Synthesis Algorithm</h3>
+            <p>Dynamic hierarchical tree graph synthesis (Gateway $\rightarrow$ Core Switch $\rightarrow$ Access Points $\rightarrow$ Endpoints) without SNMP MIB setup.</p>
+          </div>
+          <div class="content-box">
+            <h3>Claim 3: Adaptive Variable Polling Rate</h3>
+            <p>Event-driven telemetry synchronization that accelerates to 600ms during active scan execution for zero-latency feedback.</p>
+          </div>
+          <div class="content-box">
+            <h3>Claim 4: Offline-First Audit Trail Manager</h3>
+            <p>Local-first metadata tracking, location tags, user audit logs, and custom device management without external cloud reliance.</p>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer"><span>NetMonitor NOC Architecture Deck</span><span>Author: Lakshya Singh</span></div>
+    </div>
+
+    <!-- SLIDE 6: Dashboard & Visualization -->
+    <div class="slide">
+      <div class="slide-header">
+        <h2 class="slide-title">Interactive Dashboard Features</h2>
+        <span class="slide-subtitle">06 / USER EXPERIENCE</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-3col">
+          <div class="content-box">
+            <h3>📊 Metric KPI Cards</h3>
+            <p>Real-time counters for Total Devices, Online, Offline, and Degraded with trend indicators.</p>
+          </div>
+          <div class="content-box">
+            <h3>📈 Live Canvas Charts</h3>
+            <p>Inbound vs Outbound Mbps bandwidth line chart and SVG device type donut breakdown.</p>
+          </div>
+          <div class="content-box">
+            <h3>🔍 Dynamic Filtering</h3>
+            <p>Global instant search across IP, Hostname, MAC, Vendor, Location, and Device Categories.</p>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer"><span>NetMonitor NOC Architecture Deck</span><span>Author: Lakshya Singh</span></div>
+    </div>
+
+    <!-- SLIDE 7: Safety & Security Audit -->
+    <div class="slide">
+      <div class="slide-header">
+        <h2 class="slide-title">Security & Safety Audit</h2>
+        <span class="slide-subtitle">07 / SECURITY FRAMEWORK</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2col">
+          <div class="content-box">
+            <h3>🔒 Robust Defense Mechanisms</h3>
+            <ul>
+              <li><strong>SQL Injection Immunity</strong>: 100% Parameterized queries using SQLite `?` bindings.</li>
+              <li><strong>XSS Prevention</strong>: Safe DOM property assignments (`textContent`).</li>
+              <li><strong>Local-First Data Privacy</strong>: Offline OUI resolution ensures zero external data leak.</li>
+              <li><strong>Network Safety</strong>: Non-destructive, bounded threadpools prevent network overload.</li>
+            </ul>
+          </div>
+          <div class="content-box">
+            <h3>🛡️ Privilege Management</h3>
+            <ul>
+              <li>Runs by default in **unprivileged fallback mode** using standard OS pings and ARP cache reads.</li>
+              <li>Elevated root access (`sudo`) is strictly optional for Layer-2 raw packet creation.</li>
+              <li>Socket binding falls back gracefully to `127.0.0.1`.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer"><span>NetMonitor NOC Architecture Deck</span><span>Author: Lakshya Singh</span></div>
+    </div>
+
+    <!-- SLIDE 8: Deployment Options -->
+    <div class="slide">
+      <div class="slide-header">
+        <h2 class="slide-title">Flexible Deployment Models</h2>
+        <span class="slide-subtitle">08 / DEPLOYMENT OPTIONS</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-3col">
+          <div class="content-box">
+            <h3>🐍 Python Local Launch</h3>
+            <p>Run directly with zero complex setup:</p>
+            <p style="font-family:'JetBrains Mono'; color:var(--cyan); font-size:12px;">.venv/bin/python main.py</p>
+          </div>
+          <div class="content-box">
+            <h3>🐳 Turnkey Docker Compose</h3>
+            <p>1-Click containerized deployment with host network mode:</p>
+            <p style="font-family:'JetBrains Mono'; color:var(--cyan); font-size:12px;">docker-compose up -d</p>
+          </div>
+          <div class="content-box">
+            <h3>⚙️ 24/7 Systemd Daemon</h3>
+            <p>Background Linux system service for continuous network monitoring.</p>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer"><span>NetMonitor NOC Architecture Deck</span><span>Author: Lakshya Singh</span></div>
+    </div>
+
+    <!-- SLIDE 9: Conclusion -->
+    <div class="slide">
+      <div class="slide-header">
+        <h2 class="slide-title">Conclusion & Future Roadmap</h2>
+        <span class="slide-subtitle">09 / CONCLUSION</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2col">
+          <div class="content-box">
+            <h3>🎯 Summary</h3>
+            <p>NetMonitor NOC provides enterprise-grade network visibility, real-time discovery, interactive device management, and audit logging in a lightweight, local-first platform.</p>
+          </div>
+          <div class="content-box">
+            <h3>🔮 Future Roadmap</h3>
+            <ul>
+              <li>SNMP v3 Deep Interface Performance Metrics</li>
+              <li>AI Anomaly Forecasting & Latency Spikes Prediction</li>
+              <li>Automated Push Alerts (Telegram / Webhooks / Email)</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer"><span>NetMonitor NOC Architecture Deck</span><span>Author: Lakshya Singh</span></div>
+    </div>
+
+  </div>
+
+  <!-- Deck Controls Bar -->
+  <div class="deck-controls">
+    <button class="btn-deck" id="btn-prev">⬅️ Previous Slide</button>
+    <span style="font-family:'JetBrains Mono'; font-size:13px; color:var(--cyan);" id="slide-num-text">Slide 1 of 9</span>
+    <button class="btn-deck" id="btn-next">Next Slide ➡️</button>
+  </div>
+
+  <script>
+    const slides = document.querySelectorAll('.slide');
+    let currentSlide = 0;
+
+    function showSlide(index) {
+      slides.forEach((s, i) => s.classList.toggle('active', i === index));
+      document.getElementById('slide-num-text').textContent = `Slide ${index + 1} of ${slides.length}`;
+    }
+
+    document.getElementById('btn-prev').addEventListener('click', () => {
+      currentSlide = (currentSlide - 1 + slides.length) % slides.length;
+      showSlide(currentSlide);
+    });
+
+    document.getElementById('btn-next').addEventListener('click', () => {
+      currentSlide = (currentSlide + 1) % slides.length;
+      showSlide(currentSlide);
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === 'Space') {
+        currentSlide = (currentSlide + 1) % slides.length;
+        showSlide(currentSlide);
+      } else if (e.key === 'ArrowLeft') {
+        currentSlide = (currentSlide - 1 + slides.length) % slides.length;
+        showSlide(currentSlide);
+      }
+    });
+  </script>
+</body>
+</html>

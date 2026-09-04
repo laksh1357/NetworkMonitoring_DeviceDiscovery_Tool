@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NETMONITOR - NOC Operational Intelligence Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="dark-theme">
+
+  <!-- Top Header Navigation -->
+  <header class="top-header">
+    <div class="header-left">
+      <div class="brand">
+        <div class="brand-logo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+            <path d="M2 12h20"></path>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-title">NetMonitor</span>
+          <span class="brand-subtitle">Network Platform v2.4</span>
+        </div>
+      </div>
+
+      <div class="telemetry-badge">
+        <span class="pulse-dot green"></span>
+        <span id="telemetry-time">LIVE TELEMETRY --:--:--</span>
+      </div>
+    </div>
+
+    <div class="header-center">
+      <div class="search-box">
+        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <path d="m21 21-4.35-4.35"></path>
+        </svg>
+        <input type="text" id="global-search" placeholder="Search IP, Device, Hostname, Vendor...">
+      </div>
+    </div>
+
+    <div class="header-right">
+      <button class="btn primary-btn" id="btn-header-add-device">+ Add Device</button>
+      <button class="btn-sm outline" id="btn-clear-db" title="Purge database & start fresh">Clear Data</button>
+
+      <button class="icon-btn" id="btn-quick-scan" title="Run Quick Network Scan">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+        </svg>
+      </button>
+
+      <button class="icon-btn" id="btn-notifications" title="Notifications">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+          <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+        </svg>
+        <span class="notification-count" id="header-alert-count">0</span>
+      </button>
+
+      <div class="user-profile">
+        <div class="avatar">AU</div>
+        <div class="user-info">
+          <span class="user-name">Admin User</span>
+          <span class="user-role">Administrator</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace Layout -->
+  <div class="app-container">
+
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <nav class="nav-menu">
+        <a href="#dashboard" class="nav-item active" data-view="view-dashboard">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7"></rect>
+            <rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect>
+            <rect x="3" y="14" width="7" height="7"></rect>
+          </svg>
+          <span>Dashboard</span>
+        </a>
+
+        <a href="#discovery" class="nav-item" data-view="view-discovery">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M12 2a10 10 0 0 1 10 10"></path>
+            <circle cx="12" cy="12" r="4"></circle>
+          </svg>
+          <span>Device Discovery</span>
+        </a>
+
+        <a href="#devices" class="nav-item" data-view="view-devices">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+            <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+            <line x1="6" y1="6" x2="6.01" y2="6"></line>
+            <line x1="6" y1="18" x2="6.01" y2="18"></line>
+          </svg>
+          <span>Devices</span>
+        </a>
+
+        <a href="#topology" class="nav-item" data-view="view-topology">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="6" cy="6" r="3"></circle>
+            <circle cx="18" cy="6" r="3"></circle>
+            <circle cx="12" cy="18" r="3"></circle>
+            <line x1="8.5" y1="7.5" x2="15.5" y2="7.5"></line>
+            <line x1="7.5" y1="8.5" x2="10.5" y2="15.5"></line>
+            <line x1="16.5" y1="8.5" x2="13.5" y2="15.5"></line>
+          </svg>
+          <span>Network Topology</span>
+        </a>
+
+        <a href="#alerts" class="nav-item" data-view="view-alerts">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+            <polyline points="2 17 12 22 22 17"></polyline>
+            <polyline points="2 12 12 17 22 12"></polyline>
+          </svg>
+          <span>Alerts</span>
+          <span class="badge warning">12</span>
+        </a>
+
+        <a href="#history" class="nav-item" data-view="view-history">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          <span>Scan History</span>
+        </a>
+
+        <a href="#activity" class="nav-item" data-view="view-activity">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+          <span>User Activity Log</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <div class="system-status-card">
+          <div class="status-indicator">
+            <span class="pulse-dot green"></span>
+            <span class="status-title">SYSTEM OPTIMAL</span>
+          </div>
+          <p class="status-desc">All core network discovery & database monitoring agents active.</p>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="content-area">
+
+      <!-- ================= VIEW: DASHBOARD ================= -->
+      <section id="view-dashboard" class="view-panel active">
+        
+        <!-- Top Metrics Cards Row -->
+        <div class="metrics-grid">
+          <div class="metric-card glass">
+            <div class="metric-info">
+              <span class="metric-label">Total Devices</span>
+              <h2 class="metric-value" id="card-total-devices">248</h2>
+              <span class="metric-trend green">↑ 8.2% from last scan</span>
+            </div>
+            <div class="metric-icon purple">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="2" width="20" height="8" rx="2"></rect>
+                <rect x="2" y="14" width="20" height="8" rx="2"></rect>
+              </svg>
+            </div>
+          </div>
+
+          <div class="metric-card glass">
+            <div class="metric-info">
+              <span class="metric-label">Online Devices</span>
+              <h2 class="metric-value green-text" id="card-online-devices">231</h2>
+              <span class="metric-trend green" id="card-online-pct">93.1% of total</span>
+            </div>
+            <div class="metric-icon green">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+              </svg>
+            </div>
+          </div>
+
+          <div class="metric-card glass">
+            <div class="metric-info">
+              <span class="metric-label">Offline Devices</span>
+              <h2 class="metric-value red-text" id="card-offline-devices">12</h2>
+              <span class="metric-trend red" id="card-offline-pct">4.8% of total</span>
+            </div>
+            <div class="metric-icon red">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="15" y1="9" x2="9" y2="15"></line>
+                <line x1="9" y1="9" x2="15" y2="15"></line>
+              </svg>
+            </div>
+          </div>
+
+          <div class="metric-card glass">
+            <div class="metric-info">
+              <span class="metric-label">Degraded / Unknown</span>
+              <h2 class="metric-value yellow-text" id="card-degraded-devices">5</h2>
+              <span class="metric-trend yellow">2.1% of total</span>
+            </div>
+            <div class="metric-icon yellow">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- Middle Section: Network Activity, Devices by Type, Topology Map -->
+        <div class="dashboard-mid-grid">
+          
+          <!-- Column 1: Network Activity Chart -->
+          <div class="card glass chart-card">
+            <div class="card-header">
+              <div class="title-group">
+                <h3 class="card-title">Network Activity</h3>
+                <span class="card-subtitle">Live Traffic Bandwidth (Mbps)</span>
+              </div>
+              <div class="chart-legend">
+                <span class="legend-item"><span class="legend-dot cyan"></span> Inbound</span>
+                <span class="legend-item"><span class="legend-dot green"></span> Outbound</span>
+              </div>
+            </div>
+            <div class="canvas-container">
+              <canvas id="canvas-activity" height="180"></canvas>
+            </div>
+          </div>
+
+          <!-- Column 2: Devices by Type Donut Chart -->
+          <div class="card glass chart-card">
+            <div class="card-header">
+              <h3 class="card-title">Devices by Type</h3>
+            </div>
+            <div class="donut-container">
+              <svg id="donut-svg" viewBox="0 0 160 160">
+                <!-- Dynamic Donut Segments via JS -->
+              </svg>
+              <div class="donut-center-text">
+                <span class="donut-total" id="donut-total-count">248</span>
+                <span class="donut-label">Total</span>
+              </div>
+            </div>
+            <div class="donut-legend-grid" id="donut-legend-grid">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+
+          <!-- Column 3: Interactive Topology Tree Preview -->
+          <div class="card glass topology-preview-card">
+            <div class="card-header">
+              <h3 class="card-title">Network Topology</h3>
+              <div class="card-actions">
+                <button class="btn-sm text-btn" id="btn-open-full-topo">Full Map ↗</button>
+              </div>
+            </div>
+            <div class="topo-canvas-wrapper" id="mini-topo-container">
+              <!-- Mini SVG Topology Tree -->
+              <svg id="mini-topo-svg" width="100%" height="210"></svg>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Bottom Grid: Discovered Devices, Device Details, Alerts, Discovery Control -->
+        <div class="dashboard-bottom-grid">
+
+          <!-- Col 1: Recently Discovered Devices Table -->
+          <div class="card glass table-card">
+            <div class="card-header">
+              <h3 class="card-title">Recently Discovered Devices</h3>
+              <button class="btn-sm outline" id="btn-view-all-devices">View All</button>
+            </div>
+            <div class="table-responsive">
+              <table class="data-table" id="table-recent-devices">
+                <thead>
+                  <tr>
+                    <th>IP Address</th>
+                    <th>Hostname</th>
+                    <th>Type</th>
+                    <th>Vendor</th>
+                    <th>Status</th>
+                    <th>Last Seen</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-recent-devices">
+                  <!-- Rendered via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Col 2: Live Device Inspector -->
+          <div class="card glass inspector-card" id="device-inspector">
+            <div class="card-header">
+              <div class="inspector-title-row">
+                <div class="dev-badge-icon" id="insp-icon">🖧</div>
+                <div>
+                  <h3 class="card-title" id="insp-name">SW-1</h3>
+                  <span class="status-pill online" id="insp-status-pill">● Online</span>
+                </div>
+              </div>
+              <span class="text-muted font-mono" id="insp-ip-vendor">192.168.1.10 | Cisco Catalyst 2960-X</span>
+            </div>
+
+            <div class="tabs-header">
+              <button class="tab-btn active" data-tab="insp-tab-overview">Overview</button>
+              <button class="tab-btn" data-tab="insp-tab-ports">Port Scanner</button>
+              <button class="tab-btn" data-tab="insp-tab-notes">Notes & Alias</button>
+            </div>
+
+            <div class="tab-content active" id="insp-tab-overview">
+              <div class="specs-grid">
+                <div class="spec-item"><span class="spec-label">IP Address</span><span class="spec-val font-mono" id="insp-ip">192.168.1.10</span></div>
+                <div class="spec-item"><span class="spec-label">MAC Address</span><span class="spec-val font-mono" id="insp-mac">A4:83:E7:11:22:33</span></div>
+                <div class="spec-item"><span class="spec-label">Vendor</span><span class="spec-val" id="insp-vendor">Cisco Systems</span></div>
+                <div class="spec-item"><span class="spec-label">Device Type</span><span class="spec-val" id="insp-type">Switch</span></div>
+              </div>
+
+              <div class="sparklines-container">
+                <div class="sparkline-item">
+                  <div class="spark-info"><span>CPU Load</span><span class="font-mono">42%</span></div>
+                  <div class="progress-bar-bg"><div class="progress-fill cyan" style="width: 42%;"></div></div>
+                </div>
+                <div class="sparkline-item">
+                  <div class="spark-info"><span>Memory Usage</span><span class="font-mono">68%</span></div>
+                  <div class="progress-bar-bg"><div class="progress-fill yellow" style="width: 68%;"></div></div>
+                </div>
+                <div class="sparkline-item">
+                  <div class="spark-info"><span>Interface Traffic</span><span class="font-mono">124 Mbps</span></div>
+                  <div class="progress-bar-bg"><div class="progress-fill green" style="width: 55%;"></div></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-content" id="insp-tab-ports">
+              <div class="port-scanner-box">
+                <button class="btn primary-btn btn-block" id="btn-run-port-scan">Scan Common TCP Ports</button>
+                <div class="port-results-list" id="port-results-container">
+                  <span class="text-muted">Click button to scan common TCP ports (HTTP, SSH, SMB, RDP, DB).</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-content" id="insp-tab-notes">
+              <div class="form-group">
+                <label>Custom Friendly Label</label>
+                <input type="text" id="edit-custom-name" placeholder="e.g. Living Room Gateway">
+              </div>
+              <div class="form-group">
+                <label>Device Notes & Location</label>
+                <textarea id="edit-notes" rows="3" placeholder="e.g. Rack 2 - Switch Port 14"></textarea>
+              </div>
+              <button class="btn secondary-btn" id="btn-save-device-meta">Save Metadata</button>
+            </div>
+
+          </div>
+
+          <!-- Col 3: Active Alerts Stream -->
+          <div class="card glass alerts-card">
+            <div class="card-header">
+              <h3 class="card-title">Active Alerts</h3>
+              <span class="badge danger" id="active-alert-badge">4 New</span>
+            </div>
+            <div class="alerts-stream" id="alerts-stream-container">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+
+          <!-- Col 4: Device Discovery Control Box -->
+          <div class="card glass discovery-box-card">
+            <div class="card-header">
+              <h3 class="card-title">Device Discovery</h3>
+              <span class="pulse-dot blue" id="discovery-status-dot"></span>
+            </div>
+
+            <div class="discovery-form">
+              <div class="form-group">
+                <label>Scan Subnet Range</label>
+                <div class="input-with-btn">
+                  <input type="text" id="scan-subnet-input" value="192.168.1.0/24">
+                  <button class="btn-sm outline" id="btn-detect-subnet">Detect</button>
+                </div>
+              </div>
+
+              <div class="checkbox-grid">
+                <label class="custom-chk"><input type="checkbox" checked id="chk-ping"> Ping Sweep</label>
+                <label class="custom-chk"><input type="checkbox" checked id="chk-arp"> ARP Layer-2</label>
+                <label class="custom-chk"><input type="checkbox" checked id="chk-tcp"> TCP Fallback</label>
+                <label class="custom-chk"><input type="checkbox" id="chk-dns"> Reverse DNS</label>
+              </div>
+
+              <button class="btn primary-btn btn-block" id="btn-start-discovery">Start Discovery</button>
+
+              <div class="scan-progress-area" id="scan-progress-area">
+                <div class="progress-label-row">
+                  <span>Scan Progress</span>
+                  <span id="scan-pct-text">0%</span>
+                </div>
+                <div class="progress-bar-bg">
+                  <div class="progress-fill blue-fill" id="scan-progress-bar" style="width: 0%;"></div>
+                </div>
+                <div class="scan-counters-row">
+                  <div class="cnt-item"><span class="cnt-num" id="cnt-scanned">0</span><span class="cnt-lbl">Scanned</span></div>
+                  <div class="cnt-item"><span class="cnt-num green-text" id="cnt-discovered">0</span><span class="cnt-lbl">Discovered</span></div>
+                  <div class="cnt-item"><span class="cnt-num" id="cnt-online">0</span><span class="cnt-lbl">Online</span></div>
+                  <div class="cnt-item"><span class="cnt-num red-text" id="cnt-offline">0</span><span class="cnt-lbl">Offline</span></div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <!-- ================= VIEW: TOPOLOGY MAP ================= -->
+      <section id="view-topology" class="view-panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">Infrastructure Topology Map</h2>
+            <p class="panel-subtitle">Interactive Network Node Map & Link Health Telemetry</p>
+          </div>
+          <div class="panel-controls">
+            <button class="btn outline" id="topo-zoom-in">+ Zoom In</button>
+            <button class="btn outline" id="topo-zoom-out">- Zoom Out</button>
+            <button class="btn outline" id="topo-reset">Reset View</button>
+            <button class="btn primary-btn" id="topo-add-node">+ Add Custom Node</button>
+          </div>
+        </div>
+
+        <div class="topology-fullscreen-canvas card glass" id="full-topo-container">
+          <svg id="full-topo-svg" width="100%" height="640"></svg>
+
+          <!-- Floating Legend -->
+          <div class="topo-legend-box glass">
+            <div class="legend-title">Topology Legend</div>
+            <div class="legend-items">
+              <span><span class="dot blue"></span> Router / Gateway</span>
+              <span><span class="dot cyan"></span> Switch</span>
+              <span><span class="dot green"></span> Server / Host</span>
+              <span><span class="dot yellow"></span> Access Point</span>
+              <span><span class="dot red"></span> Offline Node</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- ================= VIEW: DEVICES FLEET ================= -->
+      <section id="view-devices" class="view-panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">Network Device Fleet</h2>
+            <p class="panel-subtitle">Manage and inspect all registered LAN inventory</p>
+          </div>
+          <div class="panel-controls">
+            <button class="btn secondary-btn" id="btn-export-csv">Export CSV</button>
+            <button class="btn secondary-btn" id="btn-export-json">Export JSON</button>
+          </div>
+        </div>
+
+        <div class="card glass fleet-container">
+          <div class="fleet-filter-bar">
+            <div class="filter-tabs">
+              <button class="filter-btn active" data-filter="all">All Devices (<span id="flt-count-all">0</span>)</button>
+              <button class="filter-btn" data-filter="Online">Online (<span id="flt-count-online">0</span>)</button>
+              <button class="filter-btn" data-filter="Offline">Offline (<span id="flt-count-offline">0</span>)</button>
+            </div>
+            <div class="search-box">
+              <input type="text" id="fleet-search-input" placeholder="Filter devices by IP, name, MAC, vendor...">
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="data-table" id="table-fleet-devices">
+              <thead>
+                <tr>
+                  <th>Device</th>
+                  <th>Type</th>
+                  <th>IP Address</th>
+                  <th>MAC Address</th>
+                  <th>Vendor</th>
+                  <th>Status</th>
+                  <th>Latency</th>
+                  <th>Last Seen</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-fleet-devices">
+                <!-- Rendered via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= VIEW: ALERTS ================= -->
+      <section id="view-alerts" class="view-panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">Network Alert Stream</h2>
+            <p class="panel-subtitle">Historical connection alerts, join/leave events & threshold warnings</p>
+          </div>
+        </div>
+        <div class="card glass">
+          <div class="alerts-stream full-stream" id="full-alerts-container">
+            <!-- Rendered via JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= VIEW: DISCOVERY ================= -->
+      <section id="view-discovery" class="view-panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">Network Discovery Engine</h2>
+            <p class="panel-subtitle">Configure multithreaded ARP, ICMP ping sweep & TCP probe ranges</p>
+          </div>
+        </div>
+        <div class="card glass discovery-full-panel">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Target Subnet CIDR</label>
+              <input type="text" id="disc-full-subnet" value="192.168.1.0/24">
+            </div>
+            <div class="form-group">
+              <label>Concurrency Threads</label>
+              <input type="number" value="64" min="1" max="256">
+            </div>
+            <div class="form-group">
+              <label>Host Timeout (Seconds)</label>
+              <input type="number" value="1.0" step="0.1">
+            </div>
+          </div>
+          <button class="btn primary-btn" id="btn-launch-full-discovery">Execute Full Subnet Scan</button>
+        </div>
+      </section>
+
+      <!-- ================= VIEW: HISTORY ================= -->
+      <section id="view-history" class="view-panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">Scan History Log</h2>
+            <p class="panel-subtitle">Timestamped execution records stored in SQLite database</p>
+          </div>
+        </div>
+        <div class="card glass">
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Session ID</th>
+                  <th>Timestamp (UTC)</th>
+                  <th>Online Devices Total</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-scan-history">
+                <!-- Rendered via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      <!-- ================= VIEW: USER ACTIVITY LOG ================= -->
+      <section id="view-activity" class="view-panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">User Activity & Audit Trail</h2>
+            <p class="panel-subtitle">Real-time audit monitoring log of user operations, network scans, device edits & database events</p>
+          </div>
+          <div class="panel-controls">
+            <button class="btn outline" id="btn-refresh-activity">Refresh Log</button>
+          </div>
+        </div>
+
+        <div class="card glass">
+          <div class="table-responsive">
+            <table class="data-table" id="table-activity-logs">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>User</th>
+                  <th>Action Type</th>
+                  <th>Description</th>
+                  <th>Target IP</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-activity-logs">
+                <!-- Rendered via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+  </div>
+
+  <!-- ================= MODAL: DEVICE EDITOR & MANAGER ================= -->
+  <div class="modal-overlay" id="modal-device-editor">
+    <div class="modal-card glass">
+      <div class="modal-header">
+        <div class="modal-title-row">
+          <div class="dev-badge-icon" id="modal-dev-icon">💻</div>
+          <div>
+            <h3 class="modal-title" id="modal-dev-title">Manage Device</h3>
+            <span class="status-pill online" id="modal-dev-status">● Online</span>
+          </div>
+        </div>
+        <button class="modal-close-btn" id="modal-close-btn">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Quick Connect & Quick Actions Bar -->
+        <div class="quick-connect-bar">
+          <a href="#" target="_blank" class="btn-sm secondary-btn" id="btn-conn-http">🌐 HTTP</a>
+          <a href="#" target="_blank" class="btn-sm secondary-btn" id="btn-conn-https">🔒 HTTPS</a>
+          <button class="btn-sm secondary-btn" id="btn-action-ping">📶 Live Ping</button>
+          <button class="btn-sm danger-btn" id="btn-action-delete">🗑️ Delete</button>
+        </div>
+
+        <div class="form-grid-2col">
+          <div class="form-group">
+            <label>IP Address</label>
+            <input type="text" id="modal-input-ip" placeholder="192.168.1.1">
+          </div>
+          <div class="form-group">
+            <label>MAC Address</label>
+            <input type="text" id="modal-input-mac" placeholder="AA:BB:CC:DD:EE:FF">
+          </div>
+          <div class="form-group">
+            <label>Hostname</label>
+            <input type="text" id="modal-input-hostname" placeholder="router.local">
+          </div>
+          <div class="form-group">
+            <label>Vendor</label>
+            <input type="text" id="modal-input-vendor" placeholder="Cisco Systems">
+          </div>
+          <div class="form-group">
+            <label>Device Type</label>
+            <select id="modal-select-type" class="custom-select">
+              <option value="Router">Router / Gateway</option>
+              <option value="Switch">Switch</option>
+              <option value="Server">Server</option>
+              <option value="PC/Workstation">PC / Workstation</option>
+              <option value="Access Point">Access Point</option>
+              <option value="Printer">Printer</option>
+              <option value="Firewall">Firewall</option>
+              <option value="Database">Database Server</option>
+              <option value="Storage">NAS / Storage</option>
+              <option value="IoT Device">Smart / IoT Device</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Custom Friendly Label</label>
+            <input type="text" id="modal-input-name" placeholder="e.g. Core Edge Gateway">
+          </div>
+          <div class="form-group col-span-2">
+            <label>Location / Tag</label>
+            <input type="text" id="modal-input-location" placeholder="e.g. Data Center Rack 2 - Slot 4">
+          </div>
+          <div class="form-group col-span-2">
+            <label>Notes & Spec Details</label>
+            <textarea id="modal-input-notes" rows="3" placeholder="e.g. Primary ISP uplink with 10G fiber interface"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn secondary-btn" id="modal-cancel-btn">Cancel</button>
+        <button class="btn primary-btn" id="modal-save-btn">Save Device Specs</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: USER PROFILE & NAME CHANGE ================= -->
+  <div class="modal-overlay" id="modal-profile-editor">
+    <div class="modal-card glass" style="width: 460px;">
+      <div class="modal-header">
+        <div class="modal-title-row">
+          <div class="avatar" id="profile-modal-avatar" style="width: 40px; height: 40px; font-size: 14px;">AU</div>
+          <div>
+            <h3 class="modal-title">User Account & Profile</h3>
+            <span class="card-subtitle">Change display name & role preferences</span>
+          </div>
+        </div>
+        <button class="modal-close-btn" id="profile-modal-close-btn">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Display User Name</label>
+          <input type="text" id="prof-input-name" placeholder="e.g. Lakshya Singh">
+        </div>
+        <div class="form-group">
+          <label>Role Title</label>
+          <input type="text" id="prof-input-role" placeholder="e.g. Lead Network Architect">
+        </div>
+        <div class="form-group">
+          <label>Email Address</label>
+          <input type="email" id="prof-input-email" placeholder="e.g. lakshya@network.local">
+        </div>
+        <div class="form-group">
+          <label>Avatar Initials</label>
+          <input type="text" id="prof-input-initials" maxlength="3" placeholder="e.g. LS">
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn secondary-btn" id="profile-modal-cancel-btn">Cancel</button>
+        <button class="btn primary-btn" id="profile-modal-save-btn">Save Profile Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
