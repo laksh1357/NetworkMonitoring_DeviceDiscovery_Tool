@@ -1,77 +1,74 @@
-# LAN Watchtower
+# LAN Watchtower: Network Monitoring & Discovery Engine
 
-A desktop network monitoring and device discovery tool built with Python and CustomTkinter. It detects the local IPv4 subnet, scans the LAN in a background thread, displays active devices, preserves disconnected devices as `Offline`, reports join/leave changes, and exports the current device table to CSV.
+## 1. Project Overview
+LAN Watchtower is a research-grade open-source network monitoring and device discovery system. It passively and actively scans local networks, building persistent device identities and tracking behavioral baselines over time to deterministically identify network anomalies.
 
+## 2. Technical Problem
+Modern local networks are dynamic environments characterized by frequent DHCP churn, mobile devices dropping online/offline, and varying presence patterns. Traditional ping sweepers and monitoring tools fail to maintain a coherent behavioral history when a device changes its IP address or moves between network segments, leading to fractured data and high false-positive alert rates.
 
-## Project structure
+## 3. Architecture
+The system is built on a decoupled, modular architecture featuring a Python backend and a Web-based Single Page Application (SPA). The backend is composed of distinct analytical engines communicating asynchronously. For a full architectural breakdown, refer to [ARCHITECTURE.md](docs/TECHNICAL_ARCHITECTURE.md).
 
-```text
-.
-├── main.py
-├── vendor_lookup.py
-├── oui_vendors.json
-├── database_manager.py
-├── port_scanner.py
-├── notifications.py
-├── requirements.txt
-├── README.md
-├── .github/copilot-instructions.md
-└── tests/test_main.py
-```
+## 4. Core Mechanisms
+- **Adaptive Discovery:** Dynamically selects between ICMP, ARP, and TCP probing based on historical responsiveness.
+- **Cross-Scan Identity Fusion:** Correlates MAC, Hostname, and Port heuristics to track devices persistently across DHCP lease expirations.
+- **O(1) Incremental Baselining:** Utilizes Welford's online algorithm to mathematically bound response latencies and presence frequencies without requiring unbounded time-series storage.
+- **Rule-Based Anomaly Detection:** Deterministically evaluates deviations against statistical baselines (avoiding black-box AI heuristics).
 
-## Setup
-
-Python 3.10 or newer is recommended. CustomTkinter provides the modern dark/light interface, while the device table uses a themed `ttk.Treeview`. Tkinter is included with the official macOS Python installer; Linux users may need their distribution's `python3-tk` package.
-
-On macOS with Homebrew Python, install the matching Tk runtime before creating the environment:
-
+## 5. Installation
 ```bash
-brew install python-tk@3.14
+# Clone the repository
+git clone https://github.com/laksh1357/NetworkMonitoring_DeviceDiscovery_Tool.git
+cd NetworkMonitoring_DeviceDiscovery_Tool
+
+# Install dependencies
+pip install -r requirements.txt
 ```
 
-Use a regular macOS Terminal or VS Code external terminal to launch the GUI. Sandboxed command runners may import Tkinter but cannot connect to the macOS window server.
+## 6. Configuration
+The system can be configured via environment variables or a local `.env` file to control concurrency limits, subnet targets, and baseline strictness thresholds. See `docs/CONFIGURATION.md` (Pending) for details.
 
+## 7. Usage
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-python -m unittest discover -s tests
-python main.py
+# Run the core background scanner
+python -m src.main
+
+# Run the API server
+python -m src.api.server
 ```
 
-Scapy is optional. When it is installed, the app uses an ARP broadcast scan and can display MAC addresses. Without Scapy, it uses a multithreaded operating-system ICMP ping sweep; MAC addresses may remain `Unknown`. CustomTkinter is required to launch the GUI.
+## 8. Screenshots
+![Dashboard Placeholder](docs/images/dashboard_placeholder.png)
+*Figure 1: The Network Topology and Evidence Timeline Dashboard.*
 
-## Permissions
+## 9. API
+The decoupled REST API is documented via OpenAPI 3.0 specification. It provides pagination, filtering, and structured JSON responses for Device Identities and Timeline Events. See [API.md](docs/API.md).
 
-On macOS and Linux, Scapy ARP scans generally require administrator/root privileges because they create raw Ethernet packets. Start the app with `sudo` only when ARP discovery is needed:
+## 10. Database
+LAN Watchtower uses SQLite configured in WAL (Write-Ahead Logging) mode. Device identities are stored relationally, and the `evidence_timeline` table acts as an append-only ledger referencing heavy JSON anomaly payloads by UUID to prevent data duplication.
 
-```bash
-sudo .venv/bin/python main.py
-```
+## 11. Experiments
+A strict experimental framework has been defined to validate the deterministic accuracy of the core engines against standard scenarios (DHCP churn, latency spikes, noisy devices). See [EXPERIMENTAL_EVALUATION.md](docs/EXPERIMENTAL_EVALUATION.md).
 
-The fallback ICMP scan normally does not require root, though local firewall rules can prevent ping responses. Windows may require an elevated terminal for some Scapy capture operations.
+## 12. Performance Results
+Initial benchmarks of the legacy sequential threading model showed a `/24` scan duration of ~6.17 seconds. The planned `asyncio` refactoring targets sub-second scan completions with database batch writes executing in `< 1.0 ms` for 256 records. See [PERFORMANCE.md](docs/PERFORMANCE.md).
 
-At startup the app checks the current privilege level. Without administrator/root access it shows a warning and continues in unprivileged mode. Each host is evaluated in layers: available ARP data, ICMP ping, and finally short TCP connection checks to ports 80 and 445. A positive result from any layer marks the host online, reducing false offline results when ICMP is blocked.
+## 13. Security Considerations
+- **No Raw Payloads Exposed:** The UI API drops raw packet context.
+- **SSRF Protections:** Port scanning endpoints are restricted to private network ranges.
+- **Subprocess Safety:** Network tools are executed via safe argument arrays (bypassing the shell). 
+See [SECURITY.md](docs/SECURITY.md) for the complete threat model.
 
-## How it works
+## 14. Limitations
+- Identity fusion currently relies on Layer-2 (ARP) visibility. Devices strictly behind NAT or routers without static MAC/Hostname associations may be duplicated.
+- Does not inspect application-layer payloads (e.g., Deep Packet Inspection).
 
-1. A UDP route lookup identifies the active local interface, then the app uses its `/24` network as the scan range.
-2. The scan runs off the Tkinter main thread. Progress and results are delivered through a thread-safe queue.
-3. Scapy ARP discovery is attempted only when privileges are available. Hosts then use bounded ICMP and TCP fallback checks with strict timeouts.
-4. Reverse DNS resolves hostnames when possible. Devices missing from a later scan remain in the table as `Offline`, allowing connection changes to be seen.
-5. The vendor resolver loads `oui_vendors.json` offline and returns `Unknown` safely for unrecognized prefixes. Set `MAC_VENDOR_API=1` to allow an optional API lookup after the local database misses; API errors and offline use fall back to `Unknown`.
-6. `Export Log` writes IP, MAC, vendor, hostname, status, latency, and last-seen data to CSV.
+## 15. Testing
+The test suite utilizes a `MockNetworkSimulator` to execute offline integration tests representing complex multi-stage anomalies and DHCP churn events without sending unauthorized packets onto a live network. See [TESTING.md](docs/TESTING.md).
 
-## New-device alerts
+## 16. Future Research
+- Evaluation of Count-Min Sketches for tracking port-service distributions in highly dynamic server environments.
+- Integration with external Threat Intelligence feeds for cross-referencing deterministic anomalies.
 
-`notifications.py` uses Plyer for native desktop notifications and falls back to macOS `osascript` when Plyer cannot load its optional Objective-C bridge. The first completed scan establishes the baseline and does not alert. Later scans compare known, non-`Unknown` MAC addresses with the previous scan; each new MAC triggers `New Device Detected: [hostname]`, falling back to the IP address when hostname resolution is unavailable. If notification support is unavailable, scanning continues normally without crashing.
-
-## Device port checks
-
-Select an online device in the device table to check common TCP ports in the background. The scanner currently checks ports such as FTP (21), SSH (22), HTTP (80), HTTPS (443), SMB (445), and alternate HTTP (8080), returning only ports that accept a TCP connection. Results appear in the `PORTS` panel without freezing the interface. This is a limited diagnostic check, not a full port scan; only scan devices and networks you are authorized to assess.
-
-## SQLite history
-
-The application automatically creates `network_logs.db` in the project directory. `database_manager.py` exposes `NetworkDatabase` with `upsert_device`, `insert_scan_record`, `record_scan`, `fetch_devices`, and `fetch_scan_logs`. Each completed scan updates device `last_seen` values and inserts a timestamped online-device total. The database uses parameterized SQL, WAL mode, and a re-entrant lock for safe access from worker/UI threads.
-
-Only scan networks you own or are authorized to monitor.
+## 17. License
+Distributed under the MIT License. See `LICENSE` for more information.

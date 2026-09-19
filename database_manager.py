@@ -187,11 +187,10 @@ class NetworkDatabase:
 
     def fetch_alerts(self, limit: int = 50) -> list[dict[str, Any]]:
         """Return recent alerts in newest-first order."""
-        with self._lock:
-            rows = self._connection.execute(
-                "SELECT id, timestamp, severity, title, message, ip FROM alerts ORDER BY timestamp DESC, id DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
+        rows = self._connection.execute(
+            "SELECT id, timestamp, severity, title, message, ip FROM alerts ORDER BY timestamp DESC, id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
         return [dict(row) for row in rows]
 
     def insert_activity_log(self, user_name: str, action_type: str, description: str, ip: str = "") -> int:
@@ -206,25 +205,23 @@ class NetworkDatabase:
 
     def fetch_activity_logs(self, limit: int = 100) -> list[dict[str, Any]]:
         """Return recent activity audit trail logs."""
-        with self._lock:
-            rows = self._connection.execute(
-                "SELECT id, timestamp, user_name, action_type, description, ip FROM activity_logs ORDER BY timestamp DESC, id DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
+        rows = self._connection.execute(
+            "SELECT id, timestamp, user_name, action_type, description, ip FROM activity_logs ORDER BY timestamp DESC, id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
         return [dict(row) for row in rows]
 
     def get_user_profile(self) -> dict[str, str]:
         """Fetch stored user profile metadata."""
-        with self._lock:
-            row = self._connection.execute("SELECT display_name, role_title, email, avatar_initials FROM user_profile WHERE id = 1").fetchone()
-            if row:
-                return dict(row)
-            return {
-                "display_name": "Admin User",
-                "role_title": "Administrator",
-                "email": "admin@network.local",
-                "avatar_initials": "AU",
-            }
+        row = self._connection.execute("SELECT display_name, role_title, email, avatar_initials FROM user_profile WHERE id = 1").fetchone()
+        if row:
+            return dict(row)
+        return {
+            "display_name": "Admin User",
+            "role_title": "Administrator",
+            "email": "admin@network.local",
+            "avatar_initials": "AU",
+        }
 
     def update_user_profile(self, display_name: str, role_title: str, email: str, avatar_initials: str) -> None:
         """Update or insert stored user profile."""
@@ -260,12 +257,24 @@ class NetworkDatabase:
         online_total = len(device_list) if total_devices_online is None else total_devices_online
         if online_total < 0:
             raise ValueError("total_devices_online cannot be negative")
+        device_data = [
+            (
+                device.ip,
+                device.mac or "Unknown",
+                device.hostname or "Unknown",
+                device.vendor or "Unknown",
+                getattr(device, "device_type", "PC/Workstation"),
+                getattr(device, "custom_name", ""),
+                getattr(device, "notes", ""),
+                timestamp,
+                timestamp,
+            )
+            for device in device_list
+        ]
+
         with self._lock, self._connection:
-            for device in device_list:
-                dev_type = getattr(device, "device_type", "PC/Workstation")
-                c_name = getattr(device, "custom_name", "")
-                d_notes = getattr(device, "notes", "")
-                self._connection.execute(
+            if device_data:
+                self._connection.executemany(
                     """
                     INSERT INTO devices (ip, mac, hostname, vendor, device_type, custom_name, notes, first_seen, last_seen)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -276,17 +285,7 @@ class NetworkDatabase:
                         device_type = CASE WHEN excluded.device_type != 'PC/Workstation' THEN excluded.device_type ELSE devices.device_type END,
                         last_seen = excluded.last_seen
                     """,
-                    (
-                        device.ip,
-                        device.mac or "Unknown",
-                        device.hostname or "Unknown",
-                        device.vendor or "Unknown",
-                        dev_type,
-                        c_name,
-                        d_notes,
-                        timestamp,
-                        timestamp,
-                    ),
+                    device_data,
                 )
             cursor = self._connection.execute(
                 "INSERT INTO scan_logs (timestamp, total_devices_online) VALUES (?, ?)",
@@ -298,16 +297,15 @@ class NetworkDatabase:
         """Return recent scan sessions in newest-first order for the UI."""
         if limit < 1:
             raise ValueError("limit must be at least 1")
-        with self._lock:
-            rows = self._connection.execute(
-                """
-                SELECT id, timestamp, total_devices_online
-                FROM scan_logs
-                ORDER BY timestamp DESC, id DESC
-                LIMIT ?
-                """,
-                (limit,),
-            ).fetchall()
+        rows = self._connection.execute(
+            """
+            SELECT id, timestamp, total_devices_online
+            FROM scan_logs
+            ORDER BY timestamp DESC, id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
         return [dict(row) for row in rows]
 
     def fetch_devices(self, limit: int | None = None) -> list[dict[str, Any]]:
@@ -319,8 +317,7 @@ class NetworkDatabase:
                 raise ValueError("limit must be at least 1")
             query += " LIMIT ?"
             parameters = (limit,)
-        with self._lock:
-            rows = self._connection.execute(query, parameters).fetchall()
+        rows = self._connection.execute(query, parameters).fetchall()
         return [dict(row) for row in rows]
 
     def clear_database(self) -> None:

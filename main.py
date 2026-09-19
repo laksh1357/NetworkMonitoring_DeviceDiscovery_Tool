@@ -101,9 +101,13 @@ def detect_local_subnet() -> ipaddress.IPv4Network:
 
 def ping_host(ip: str, timeout: float = 1.0) -> tuple[bool, float | None]:
     """Ping one address using the host OS and return success plus elapsed ms."""
-    command = ["ping", "-n", "-c", "1", "-W", str(max(1, int(timeout * 1000))), ip]
-    if platform.system().lower() == "windows":
+    os_name = platform.system().lower()
+    if os_name == "windows":
         command = ["ping", "-n", "1", "-w", str(int(timeout * 1000)), ip]
+    elif os_name == "linux":
+        command = ["ping", "-n", "-c", "1", "-W", str(max(1, int(timeout))), ip]
+    else:
+        command = ["ping", "-n", "-c", "1", "-W", str(max(1, int(timeout * 1000))), ip]
     started = time.perf_counter()
     try:
         completed = subprocess.run(

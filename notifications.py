@@ -30,10 +30,10 @@ def notify_new_device(ip: str, hostname: str = "Unknown") -> bool:
         except Exception:
             pass
     if platform.system() == "Darwin":
-        escaped_label = label.replace("\\", "\\\\").replace('"', '\\"')
-        script = f'display notification "New Device Detected: {escaped_label}" with title "LAN Watchtower"'
         try:
-            subprocess.run(["osascript", "-e", script], capture_output=True, timeout=3, check=False)
+            # Safely pass the label as an argument to avoid AppleScript injection
+            script = 'on run argv\ndisplay notification "New Device Detected: " & item 1 of argv with title "LAN Watchtower"\nend run'
+            subprocess.run(["osascript", "-e", script, label], capture_output=True, timeout=3, check=False)
             return True
         except (OSError, subprocess.SubprocessError):
             pass

@@ -318,6 +318,15 @@ class NOCRequestHandler(SimpleHTTPRequestHandler):
             if not ip:
                 self._send_error_json("Target IP is required")
                 return
+            try:
+                import ipaddress
+                ip_obj = ipaddress.ip_address(ip)
+                if not ip_obj.is_private:
+                    self._send_error_json("Target IP must be a private network address to prevent SSRF")
+                    return
+            except ValueError:
+                self._send_error_json("Invalid IP address format")
+                return
             ports_to_check = body.get("ports")
             try:
                 results = scan_ports(ip, ports=ports_to_check) if ports_to_check else scan_ports(ip)
