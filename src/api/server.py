@@ -15,11 +15,12 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from database_manager import NetworkDatabase
-from main import Device, NetworkScanner, detect_local_subnet
-from port_scanner import scan_ports
+from src.core.database import NetworkDatabase
+from src.core.models import Device
+from src.discovery.scanner import NetworkScanner, detect_local_subnet
+from src.discovery.port_scanner import scan_ports
 
-_BASE_DIR = Path(__file__).resolve().parent
+_BASE_DIR = Path(__file__).resolve().parent.parent.parent
 _WEB_DIR = _BASE_DIR / "web"
 
 scanner = NetworkScanner()
@@ -416,7 +417,8 @@ class NOCRequestHandler(SimpleHTTPRequestHandler):
             if not ip:
                 self._send_error_json("Target IP is required")
                 return
-            from main import ping_host
+            from src.core.models import Device
+from src.discovery.scanner import ping_host
             success, latency = ping_host(ip, timeout=1.5)
             if success and ip in in_memory_devices:
                 in_memory_devices[ip].status = "Online"

@@ -4,11 +4,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from main import Device, detect_local_subnet, has_admin_privileges, normalize_mac
-from vendor_lookup import lookup_vendor, normalize_mac_prefix
-from database_manager import NetworkDatabase
-from port_scanner import OpenPort, scan_ports
-from notifications import notify_new_device
+from src.core.models import Device
+from src.discovery.scanner import detect_local_subnet, has_admin_privileges, normalize_mac
+from src.discovery.vendor_lookup import lookup_vendor, normalize_mac_prefix
+from src.core.database import NetworkDatabase
+from src.discovery.port_scanner import OpenPort, scan_ports
+from src.utils.notifications import notify_new_device
 
 
 class NetworkUtilityTests(unittest.TestCase):
@@ -23,7 +24,7 @@ class NetworkUtilityTests(unittest.TestCase):
             def close(self):
                 pass
 
-        with patch("main.socket.socket", return_value=FakeSocket()):
+        with patch("src.discovery.scanner.socket.socket", return_value=FakeSocket()):
             self.assertEqual(detect_local_subnet(), ipaddress.ip_network("192.168.50.0/24"))
 
     def test_device_row_formats_latency_and_unknown_values(self):
@@ -69,7 +70,7 @@ class NetworkUtilityTests(unittest.TestCase):
                 self.assertEqual(logs[0]["total_devices_online"], 1)
                 self.assertIn("timestamp", logs[0])
 
-    @patch("port_scanner.socket.create_connection")
+    @patch("src.discovery.port_scanner.socket.create_connection")
     def test_port_scanner_returns_open_ports_and_services(self, create_connection):
         class FakeConnection:
             def __enter__(self):
@@ -90,11 +91,11 @@ class NetworkUtilityTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             scan_ports("192.168.1.5", ports=[0])
 
-    @patch("main.os.geteuid", return_value=0)
+    @patch("src.discovery.scanner.os.geteuid", return_value=0)
     def test_privilege_helper_detects_root(self, _geteuid):
         self.assertTrue(has_admin_privileges())
 
-    @patch("main.os.geteuid", return_value=1000)
+    @patch("src.discovery.scanner.os.geteuid", return_value=1000)
     def test_privilege_helper_detects_unprivileged_mode(self, _geteuid):
         self.assertFalse(has_admin_privileges())
 

@@ -5,6 +5,8 @@ Run with: python main.py
 
 from __future__ import annotations
 
+from src.core.models import Device
+
 import csv
 import ipaddress
 import os
@@ -21,10 +23,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
-from vendor_lookup import load_oui_database, lookup_vendor
-from database_manager import NetworkDatabase
-from notifications import notify_new_device
-from port_scanner import scan_ports
+from src.discovery.vendor_lookup import load_oui_database, lookup_vendor
+from src.core.database import NetworkDatabase
+from src.utils.notifications import notify_new_device
+from src.discovery.port_scanner import scan_ports
 
 try:
     import tkinter as tk
@@ -44,23 +46,6 @@ except ImportError:
     ARP = Ether = srp = None
 
 
-@dataclass(slots=True)
-class Device:
-    ip: str
-    mac: str = "Unknown"
-    vendor: str = "Unknown"
-    hostname: str = "Unknown"
-    status: str = "Offline"
-    latency_ms: float | None = None
-    last_seen: str = "Never"
-    device_type: str = "PC/Workstation"
-    custom_name: str = ""
-    notes: str = ""
-
-    def as_row(self) -> tuple[str, str, str, str, str, str, str]:
-        latency = f"{self.latency_ms:.1f} ms" if self.latency_ms is not None else "-"
-        name_display = self.custom_name if self.custom_name else self.hostname
-        return (self.ip, self.mac, self.vendor, name_display, self.status, latency, self.last_seen)
 
 
 def infer_device_type(ip: str, hostname: str, vendor: str) -> str:

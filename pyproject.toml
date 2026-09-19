@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "network-monitoring-tool"
+version = "0.2.0"
+description = "NOC Operations Intelligence Engine & Device Discovery Tool"
+readme = "README.md"
+authors = [
+    {name = "Lakshya Singh"}
+]
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    # Optional dependencies based on local setup, currently standard lib heavy
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "scapy"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[project.scripts]
+lan-watchtower = "src.__main__:run_server"
