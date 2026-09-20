@@ -187,10 +187,11 @@ class NetworkDatabase:
 
     def fetch_alerts(self, limit: int = 50) -> list[dict[str, Any]]:
         """Return recent alerts in newest-first order."""
-        rows = self._connection.execute(
-            "SELECT id, timestamp, severity, title, message, ip FROM alerts ORDER BY timestamp DESC, id DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT id, timestamp, severity, title, message, ip FROM alerts ORDER BY timestamp DESC, id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
         return [dict(row) for row in rows]
 
     def insert_activity_log(self, user_name: str, action_type: str, description: str, ip: str = "") -> int:
@@ -205,15 +206,17 @@ class NetworkDatabase:
 
     def fetch_activity_logs(self, limit: int = 100) -> list[dict[str, Any]]:
         """Return recent activity audit trail logs."""
-        rows = self._connection.execute(
-            "SELECT id, timestamp, user_name, action_type, description, ip FROM activity_logs ORDER BY timestamp DESC, id DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT id, timestamp, user_name, action_type, description, ip FROM activity_logs ORDER BY timestamp DESC, id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
         return [dict(row) for row in rows]
 
     def get_user_profile(self) -> dict[str, str]:
         """Fetch stored user profile metadata."""
-        row = self._connection.execute("SELECT display_name, role_title, email, avatar_initials FROM user_profile WHERE id = 1").fetchone()
+        with self._lock:
+            row = self._connection.execute("SELECT display_name, role_title, email, avatar_initials FROM user_profile WHERE id = 1").fetchone()
         if row:
             return dict(row)
         return {
@@ -297,15 +300,16 @@ class NetworkDatabase:
         """Return recent scan sessions in newest-first order for the UI."""
         if limit < 1:
             raise ValueError("limit must be at least 1")
-        rows = self._connection.execute(
-            """
-            SELECT id, timestamp, total_devices_online
-            FROM scan_logs
-            ORDER BY timestamp DESC, id DESC
-            LIMIT ?
-            """,
-            (limit,),
-        ).fetchall()
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT id, timestamp, total_devices_online
+                FROM scan_logs
+                ORDER BY timestamp DESC, id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
         return [dict(row) for row in rows]
 
     def fetch_devices(self, limit: int | None = None) -> list[dict[str, Any]]:
@@ -317,7 +321,8 @@ class NetworkDatabase:
                 raise ValueError("limit must be at least 1")
             query += " LIMIT ?"
             parameters = (limit,)
-        rows = self._connection.execute(query, parameters).fetchall()
+        with self._lock:
+            rows = self._connection.execute(query, parameters).fetchall()
         return [dict(row) for row in rows]
 
     def clear_database(self) -> None:
