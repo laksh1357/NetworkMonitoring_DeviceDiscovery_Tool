@@ -418,7 +418,7 @@ class NOCRequestHandler(SimpleHTTPRequestHandler):
                 self._send_error_json("Target IP is required")
                 return
             from src.core.models import Device
-from src.discovery.scanner import ping_host
+            from src.discovery.scanner import ping_host
             success, latency = ping_host(ip, timeout=1.5)
             if success and ip in in_memory_devices:
                 in_memory_devices[ip].status = "Online"
