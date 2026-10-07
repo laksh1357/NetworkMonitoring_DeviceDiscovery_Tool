@@ -2,3 +2,5 @@
 scapy>=2.5.0
 customtkinter>=5.2.2
 plyer>=2.1.0
+# Enables the live dashboard WebSocket endpoint.
+websockets>=12.0

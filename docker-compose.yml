@@ -1,12 +1,44 @@
-version: '3.8'
-
 services:
-  lan-watchtower:
-    build: .
-    container_name: lan_watchtower_noc
-    network_mode: "host" # Grants container direct access to local host network for ARP & ICMP scans
-    restart: unless-stopped
-    volumes:
-      - ./network_logs.db:/app/network_logs.db
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
     environment:
-      - MAC_VENDOR_API=1
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      DATABASE_PATH: /data/network_logs.db
+      WEB_CONCURRENCY: 1
+      WEBSOCKET_ENABLED: ${WEBSOCKET_ENABLED:-false}
+      NOTIFICATION_EMAIL_ENABLED: ${NOTIFICATION_EMAIL_ENABLED:-false}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      NOTIFICATION_EMAIL_TO: ${NOTIFICATION_EMAIL_TO:-}
+      WEBHOOK_URL: ${WEBHOOK_URL:-}
+    volumes:
+      - network-data:/data
+    ports:
+      - "${API_PORT:-8000}:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  frontend:
+    image: nginx:1.27-alpine
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    volumes:
+      - ./docs:/usr/share/nginx/html:ro
+    restart: unless-stopped
+
+volumes:
+  network-data:

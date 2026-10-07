@@ -1,23 +1,22 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
-# Install network utilities and system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    iputils-ping \
-    net-tools \
-    arp-scan \
-    procps \
-    && rm -rf /var/lib/apt/lists/*
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    API_HOST=0.0.0.0 \
+    API_PORT=8000 \
+    DATABASE_PATH=/data/network_logs.db \
+    WEB_CONCURRENCY=1
 
 WORKDIR /app
 
-# Copy requirements and install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application files
 COPY . .
+RUN mkdir -p /data
 
 EXPOSE 8000
 
-# Run NOC Web Server
-CMD ["python", "web_server.py"]
+# The API process is intentionally single-process. Monitoring workers are not
+# started by this deployment entry point, preventing duplicate schedulers.
+CMD ["python", "-m", "backend.api.server"]
