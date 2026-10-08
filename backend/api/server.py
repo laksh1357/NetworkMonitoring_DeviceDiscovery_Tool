@@ -12,6 +12,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 from database_manager import NetworkDatabase
 
@@ -31,6 +32,37 @@ class HealthHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self) -> None:  # noqa: N802 - required HTTP handler API
+        parsed = urlparse(self.path)
+        if parsed.path == "/api/identities":
+            with NetworkDatabase(self.database_path) as database:
+                self._respond(HTTPStatus.OK, {"identities": database.fetch_identities()})
+            return
+        if parsed.path.startswith("/api/identities/"):
+            identity_id, _, suffix = parsed.path.removeprefix("/api/identities/").partition("/")
+            with NetworkDatabase(self.database_path) as database:
+                identity = database.fetch_identity(identity_id)
+                if identity is None:
+                    self._respond(HTTPStatus.NOT_FOUND, {"error": "identity_not_found"})
+                    return
+                if suffix == "lineage" or suffix == "observations":
+                    self._respond(
+                        HTTPStatus.OK,
+                        {"observations": database.fetch_identity_observations(identity_id)},
+                    )
+                    return
+                if suffix == "conflicts":
+                    self._respond(
+                        HTTPStatus.OK,
+                        {"conflicts": database.fetch_identity_conflicts(identity_id)},
+                    )
+                    return
+                self._respond(HTTPStatus.OK, identity)
+            return
+        if parsed.path == "/api/conflicts":
+            limit = int(parse_qs(parsed.query).get("limit", ["100"])[0])
+            with NetworkDatabase(self.database_path) as database:
+                self._respond(HTTPStatus.OK, {"conflicts": database.fetch_identity_conflicts(limit=limit)})
+            return
         if self.path == "/health":
             self._respond(
                 HTTPStatus.OK,

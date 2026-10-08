@@ -132,6 +132,56 @@ class NetworkDatabase:
 
                 CREATE INDEX IF NOT EXISTS idx_device_events_time_type
                     ON device_events(occurred_at DESC, event_type);
+
+                CREATE TABLE IF NOT EXISTS device_identities (
+                    id TEXT PRIMARY KEY,
+                    identity_key TEXT NOT NULL UNIQUE,
+                    current_state TEXT NOT NULL,
+                    confidence REAL NOT NULL CHECK (confidence BETWEEN 0 AND 1),
+                    uncertainty REAL NOT NULL CHECK (uncertainty BETWEEN 0 AND 1),
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS network_observations (
+                    id TEXT PRIMARY KEY,
+                    device_identity_id TEXT NOT NULL,
+                    observed_at TEXT NOT NULL,
+                    ip TEXT NOT NULL,
+                    mac TEXT NOT NULL,
+                    hostname TEXT NOT NULL,
+                    vendor TEXT NOT NULL,
+                    fingerprint TEXT,
+                    open_ports TEXT NOT NULL DEFAULT '[]',
+                    latency_ms REAL,
+                    packet_loss REAL,
+                    source TEXT NOT NULL,
+                    evidence TEXT NOT NULL DEFAULT '{}'
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_identity_observations_time
+                    ON network_observations(device_identity_id, observed_at DESC);
+
+                CREATE TABLE IF NOT EXISTS identity_conflicts (
+                    id TEXT PRIMARY KEY,
+                    device_identity_id TEXT NOT NULL,
+                    conflict_type TEXT NOT NULL,
+                    severity TEXT NOT NULL,
+                    uncertainty REAL NOT NULL CHECK (uncertainty BETWEEN 0 AND 1),
+                    reason TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'OPEN',
+                    created_at TEXT NOT NULL,
+                    resolved_at TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS unresolved_behavior (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    device_identity_id TEXT NOT NULL,
+                    observation_id TEXT NOT NULL,
+                    features TEXT NOT NULL,
+                    timestamp TEXT NOT NULL,
+                    promotion_status TEXT NOT NULL DEFAULT 'QUARANTINED'
+                );
                 """
             )
             columns = {
@@ -673,6 +723,125 @@ class NetworkDatabase:
     def close(self) -> None:
         with self._lock:
             self._connection.close()
+
+    def save_identity(self, identity_id: str, identity_key: str, state: str,
+                      confidence: float, created_at: str | None = None) -> None:
+        """Persist an ECIV identity without changing legacy device records."""
+        if not identity_id or not identity_key or not 0 <= confidence <= 1:
+            raise ValueError("identity id/key and confidence between 0 and 1 are required")
+        timestamp = self._timestamp()
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO device_identities
+                    (id, identity_key, current_state, confidence, uncertainty, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    current_state = excluded.current_state,
+                    confidence = excluded.confidence,
+                    uncertainty = excluded.uncertainty,
+                    updated_at = excluded.updated_at
+                """,
+                (identity_id, identity_key, state, confidence, 1.0 - confidence,
+                 created_at or timestamp, timestamp),
+            )
+
+    def save_identity_observation(self, identity_id: str, observation: dict[str, Any]) -> None:
+        """Persist a normalized observation as immutable ECIV evidence."""
+        import json
+
+        required = ("observation_id", "ip", "mac", "hostname", "vendor", "source")
+        if not identity_id or any(key not in observation for key in required):
+            raise ValueError("identity_id and required observation fields are needed")
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT OR IGNORE INTO network_observations
+                    (id, device_identity_id, observed_at, ip, mac, hostname, vendor,
+                     fingerprint, open_ports, latency_ms, packet_loss, source, evidence)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    observation["observation_id"], identity_id,
+                    observation.get("observed_at", self._timestamp()), observation["ip"],
+                    observation["mac"], observation["hostname"], observation["vendor"],
+                    observation.get("fingerprint"), json.dumps(observation.get("open_ports", [])),
+                    observation.get("latency_ms"), observation.get("packet_loss"),
+                    observation["source"], json.dumps(observation.get("raw_evidence", {})),
+                ),
+            )
+
+    def fetch_identity_observations(self, identity_id: str, limit: int = 100) -> list[dict[str, Any]]:
+        if not identity_id or limit < 1:
+            raise ValueError("identity_id and a positive limit are required")
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT * FROM network_observations WHERE device_identity_id = ? "
+                "ORDER BY observed_at DESC LIMIT ?", (identity_id, limit)
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def save_identity_conflict(self, conflict: dict[str, Any]) -> None:
+        """Persist an ECIV conflict and keep it open until explicitly resolved."""
+        required = ("conflict_id", "identity_id", "conflict_type", "severity", "uncertainty_score", "reason")
+        if any(key not in conflict for key in required):
+            raise ValueError("conflict is missing required fields")
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT OR IGNORE INTO identity_conflicts
+                    (id, device_identity_id, conflict_type, severity, uncertainty, reason,
+                     status, created_at, resolved_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    conflict["conflict_id"], conflict["identity_id"], conflict["conflict_type"],
+                    conflict["severity"], conflict["uncertainty_score"], conflict["reason"],
+                    conflict.get("status", "OPEN"), conflict.get("created_at", self._timestamp()),
+                    conflict.get("resolved_at"),
+                ),
+            )
+
+    def fetch_identities(self, limit: int = 100) -> list[dict[str, Any]]:
+        if limit < 1:
+            raise ValueError("limit must be at least 1")
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT * FROM device_identities ORDER BY updated_at DESC LIMIT ?", (limit,)
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def fetch_identity(self, identity_id: str) -> dict[str, Any] | None:
+        if not identity_id:
+            raise ValueError("identity_id is required")
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM device_identities WHERE id = ?", (identity_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def fetch_identity_conflicts(self, identity_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+        if limit < 1:
+            raise ValueError("limit must be at least 1")
+        query = "SELECT * FROM identity_conflicts"
+        parameters: tuple[Any, ...] = ()
+        if identity_id:
+            query += " WHERE device_identity_id = ?"
+            parameters = (identity_id,)
+        query += " ORDER BY created_at DESC LIMIT ?"
+        parameters += (limit,)
+        with self._lock:
+            rows = self._connection.execute(query, parameters).fetchall()
+        return [dict(row) for row in rows]
+
+    def resolve_identity_conflict(self, conflict_id: str) -> None:
+        if not conflict_id:
+            raise ValueError("conflict_id is required")
+        with self._lock, self._connection:
+            self._connection.execute(
+                "UPDATE identity_conflicts SET status = 'RESOLVED', resolved_at = ? WHERE id = ?",
+                (self._timestamp(), conflict_id),
+            )
 
     def __enter__(self) -> "NetworkDatabase":
         return self
