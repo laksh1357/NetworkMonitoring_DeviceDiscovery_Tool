@@ -19,4 +19,4 @@ EXPOSE 8000
 
 # The API process is intentionally single-process. Monitoring workers are not
 # started by this deployment entry point, preventing duplicate schedulers.
-CMD ["python", "-m", "backend.api.server"]
+CMD ["python", "-m", "src.api.server"]

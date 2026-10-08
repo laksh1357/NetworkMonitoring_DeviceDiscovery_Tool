@@ -37,7 +37,7 @@ services:
     ports:
       - "${FRONTEND_PORT:-8080}:80"
     volumes:
-      - ./docs:/usr/share/nginx/html:ro
+      - ./web:/usr/share/nginx/html:ro
     restart: unless-stopped
 
 volumes:

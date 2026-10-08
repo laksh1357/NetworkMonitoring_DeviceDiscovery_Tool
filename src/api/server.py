@@ -35,64 +35,11 @@ scan_state = {
     "offline": 0,
     "last_completed": None,
     "last_error": None,
-    "current_subnet": "192.168.1.0/24",
+    "current_subnet": None,
 }
 in_memory_devices: dict[str, Device] = {}
 auto_scan_active = False
 auto_scan_interval = 300  # seconds
-
-
-def init_demo_seed_if_empty() -> None:
-    """Seed sample network topology and devices if database is brand new for immediate NOC demonstration."""
-    existing = database.fetch_devices()
-    if len(existing) > 0:
-        return
-
-    sample_nodes = [
-        ("192.168.1.1", "00:1A:2B:3C:4D:5E", "Edge-Router", "Cisco Systems", "Router", "Core Edge Gateway", "Primary ISP Uplink"),
-        ("192.168.1.2", "00:1A:2B:88:99:AA", "Firewall-01", "Palo Alto Networks", "Firewall", "Main Perimeter FW", "Active HA Mode"),
-        ("192.168.1.3", "00:22:55:66:77:88", "Core-Switch-01", "Cisco Systems", "Switch", "Data Center Core", "10G Fiber Backbone"),
-        ("192.168.1.10", "A4:83:E7:11:22:33", "SW-1-Access", "Cisco Systems", "Switch", "Floor 1 Switch", "24-Port PoE Switch"),
-        ("192.168.1.11", "A4:83:E7:44:55:66", "SW-2-Access", "Hewlett Packard", "Switch", "Floor 2 Switch", "48-Port Gigabit"),
-        ("192.168.1.12", "A4:83:E7:77:88:99", "SW-3-Access", "Cisco Systems", "Switch", "Floor 3 Switch", "24-Port PoE"),
-        ("192.168.1.20", "00:50:56:AA:BB:CC", "App-Server-01", "Dell Inc.", "Server", "Production Web App", "Ubuntu 22.04 LTS"),
-        ("192.168.1.21", "00:50:56:DD:EE:FF", "App-Server-02", "Dell Inc.", "Server", "API Gateway", "Docker Swarm Host"),
-        ("192.168.1.22", "00:50:56:11:33:55", "DB-Server-01", "Dell Inc.", "Server", "Primary PostgreSQL DB", "NVMe RAID 10 Cluster"),
-        ("192.168.1.25", "00:11:32:99:88:77", "NAS-Backup-01", "Synology Inc.", "Server", "Network Storage", "120TB Btrfs Storage"),
-        ("192.168.1.50", "D8:07:B6:12:34:56", "AP-Lobby", "Ubiquiti Networks", "Access Point", "Lobby Guest Wi-Fi", "UniFi 6 Pro"),
-        ("192.168.1.51", "D8:07:B6:65:43:21", "AP-Office-West", "Ubiquiti Networks", "Access Point", "West Wing Wi-Fi", "UniFi 6 Long-Range"),
-        ("192.168.1.101", "3c:22:fb:11:22:33", "Lakshya-MacBook", "Apple Inc.", "PC/Workstation", "Dev Workstation", "macOS Sonoma"),
-        ("192.168.1.102", "54:ee:75:33:44:55", "Workstation-02", "Lenovo Group", "PC/Workstation", "CAD Design Rig", "Windows 11 Pro"),
-        ("192.168.1.103", "b4:2e:99:66:77:88", "Printer-HR", "HP Inc.", "Printer", "HR Office LaserJet", "Color LaserJet Enterprise"),
-    ]
-
-    for ip, mac, host, vendor, dev_type, custom_name, notes in sample_nodes:
-        database.upsert_device(
-            ip=ip,
-            mac=mac,
-            hostname=host,
-            vendor=vendor,
-            device_type=dev_type,
-            custom_name=custom_name,
-            notes=notes,
-        )
-        in_memory_devices[ip] = Device(
-            ip=ip,
-            mac=mac,
-            vendor=vendor,
-            hostname=host,
-            status="Online" if not ip.endswith(".103") else "Offline",
-            latency_ms=1.2 if ip.endswith(".1") else (4.5 if not ip.endswith(".103") else None),
-            last_seen=time.strftime("%Y-%m-%d %H:%M:%S"),
-            device_type=dev_type,
-            custom_name=custom_name,
-            notes=notes,
-        )
-
-    database.insert_alert("INFO", "NOC Engine Online", "Network Operations Monitoring Engine initialized successfully.")
-    database.insert_alert("WARNING", "High Memory Load Detected", "App-Server-02 memory usage reached 68%", "192.168.1.21")
-    database.insert_alert("CRITICAL", "High Latency Warning", "SW-2-Access response time spiked above 45ms", "192.168.1.11")
-    database.insert_alert("RESOLVED", "Printer-HR Back Online", "Printer device resumed network connection", "192.168.1.103")
 
 
 class NOCRequestHandler(SimpleHTTPRequestHandler):
@@ -116,6 +63,19 @@ class NOCRequestHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
 
+        if path == "/health":
+            self._send_json({"status": "ok", "service": "lan-watchtower"})
+            return
+
+        if path == "/ready":
+            try:
+                database.fetch_devices(limit=1)
+            except Exception:
+                self._send_json({"status": "not_ready"}, code=503)
+                return
+            self._send_json({"status": "ready"})
+            return
+
         if path == "/api/subnet":
             try:
                 sub = detect_local_subnet()
@@ -126,7 +86,7 @@ class NOCRequestHandler(SimpleHTTPRequestHandler):
                     "privileged": scanner.privileged,
                 })
             except Exception as exc:
-                self._send_json({"subnet": "192.168.1.0/24", "num_hosts": 254, "privileged": False, "warning": str(exc)})
+                self._send_error_json(f"Unable to detect local subnet: {exc}", code=503)
             return
 
         if path == "/api/devices":
@@ -135,8 +95,8 @@ class NOCRequestHandler(SimpleHTTPRequestHandler):
             for item in db_devices:
                 ip = item["ip"]
                 mem_dev = in_memory_devices.get(ip)
-                status = mem_dev.status if mem_dev else "Online"
-                latency = mem_dev.latency_ms if mem_dev else 2.4
+                status = mem_dev.status if mem_dev else item.get("status", "Unknown")
+                latency = mem_dev.latency_ms if mem_dev else item.get("latency_ms")
                 result.append({
                     "ip": ip,
                     "mac": item.get("mac", "Unknown"),
@@ -253,7 +213,9 @@ class NOCRequestHandler(SimpleHTTPRequestHandler):
 
             try:
                 import ipaddress
-                raw_sub = body.get("subnet") or "192.168.1.0/24"
+                raw_sub = body.get("subnet")
+                if not raw_sub:
+                    raw_sub = str(detect_local_subnet())
                 sub = ipaddress.ip_network(raw_sub, strict=False)
             except Exception as exc:
                 self._send_error_json(f"Invalid subnet range: {exc}")
@@ -457,10 +419,7 @@ class NOCRequestHandler(SimpleHTTPRequestHandler):
             self._send_json({"message": "Database cleared successfully"})
             return
 
-        if path == "/api/database/seed":
-            init_demo_seed_if_empty()
-            self._send_json({"message": "Demo data populated successfully"})
-            return
+
 
         self._send_error_json("Endpoint not found", code=404)
 
@@ -480,10 +439,15 @@ def run_server(port: int = 8000, open_browser: bool = True) -> HTTPServer:
     return httpd
 
 
-if __name__ == "__main__":
-    server = run_server(8000, open_browser=True)
+def main() -> None:
+    """Run the canonical API without opening a desktop browser."""
+    port = int(os.environ.get("API_PORT", "8000"))
+    server = run_server(port, open_browser=False)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nShutting down NOC Web Server...")
         server.server_close()
+
+
+if __name__ == "__main__":
+    main()

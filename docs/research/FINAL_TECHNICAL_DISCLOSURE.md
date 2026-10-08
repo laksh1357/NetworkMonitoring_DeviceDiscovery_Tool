@@ -76,7 +76,7 @@ Generates D3.js/Cytoscape compatible JSON mapping purely evidentiary edges (e.g.
 - Secures database UI read access against blocking sequential background writes.
 
 ## 17. Experimental Validation
-*Status: Implemented framework (`docs/EXPERIMENTAL_EVALUATION.md`), Execution Pending.*
+*Status: Implemented framework (`docs/research/EXPERIMENTAL_EVALUATION.md`), Execution Pending.*
 A rigorous experimental matrix defines 10 scenarios (DHCP churn, latency deviation, noisy flapping devices). All experiments rely on a deterministic `MockNetworkSimulator` to guarantee reproducible validation without unauthorized physical network traversal. 
 
 ## 18. Performance Measurements
@@ -86,7 +86,7 @@ A rigorous experimental matrix defines 10 scenarios (DHCP churn, latency deviati
 - **Engineered Improvements:** The `database_manager.py` was refactored to use `executemany()` for bulk inserts, and Python read locks were removed to restore full SQLite WAL concurrency, eliminating dashboard UI freezing.
 
 ## 19. Security Model
-*Status: Implemented and audited (`docs/SECURITY.md`).*
+*Status: Implemented and audited (`docs/deployment/SECURITY.md`).*
 - **SSRF Prevention:** The web server strictly drops network requests targeting non-private RFC 1918 ranges.
 - **Shell Injection:** Eliminated unsafe `shell=True` subprocess interpolation (e.g., the AppleScript `osascript` notifications bug was explicitly patched to use safe argument arrays).
 - **Least Privilege:** Web API runs unprivileged, segregated from the discovery daemon.

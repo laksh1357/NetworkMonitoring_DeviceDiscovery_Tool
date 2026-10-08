@@ -10,45 +10,53 @@ Visit the [LAN Watchtower project website](https://laksh1357.github.io/NetworkMo
 
 ```text
 .
-├── main.py
-├── vendor_lookup.py
-├── oui_vendors.json
-├── database_manager.py
-├── port_scanner.py
-├── notifications.py
-├── requirements.txt
-├── README.md
-├── .github/copilot-instructions.md
-└── tests/test_main.py
+├── src/                # canonical application package
+├── desktop/            # desktop application boundary
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   └── fixtures/
+├── main.py             # compatibility desktop launcher
+├── database_manager.py # compatibility persistence entry point
+├── web/                # canonical static frontend
+│   ├── assets/
+│   ├── components/
+│   └── pages/
+├── docs/               # architecture, research, API, deployment docs
+├── pyproject.toml
+└── requirements.txt
 ```
 
-The application also exposes a backend package boundary for incremental
-evolution toward a web dashboard:
+The canonical package is organized by application responsibility:
 
 ```text
-backend/
-├── api/             # Future HTTP API boundary
-├── core/            # Shared settings and transport-neutral events
-├── database/        # Persistence service boundary
+src/
+├── api/             # HTTP API and health/readiness endpoints
+├── config/          # Runtime and scan configuration
+├── core/
+│   ├── models/      # Shared domain models
+│   ├── database/    # SQLite persistence boundary
+│   └── events/      # Transport-neutral events
 ├── discovery/       # Network discovery primitives
-├── models/          # UI- and transport-independent domain models
-├── monitoring/      # Monitoring state helpers
-├── notifications/  # Notification channel boundary
-├── scanning/        # Host and service scanning boundary
-├── services/        # Application orchestration services
-├── utils/           # Shared utilities
-└── websocket/       # Future live-update boundary
+├── identity/        # ECIV identity correlation and verification
+├── monitoring/      # Continuous discovery and health monitoring
+├── behavior/        # Anomaly and behavior analysis
+├── scanning/        # Host and service scanning
+├── alerting/        # Alert lifecycle and notifications
+├── topology/        # Dashboard, topology, and historical analytics
+└── websocket/       # Live event transport
 ```
 
-The original top-level modules remain supported as compatibility entry points.
-No continuous monitoring, HTTP server, or WebSocket server is enabled by this
-architecture step.
+The original `backend/` package remains as a compatibility layer for existing
+integrations. Top-level modules and the desktop launcher are also retained
+where practical. Production startup does not seed demo records; discovery and
+the optional desktop UI operate on the configured database.
 
 ## Deployment
 
 LAN Watchtower remains a desktop-first monitoring application. The deployment
 profile adds a small single-process backend for liveness/readiness checks and
-serves the existing static project site as the frontend. SQLite is persisted
+serves the canonical static web frontend. SQLite is persisted
 in a named Docker volume; a separate database container is not appropriate
 for the current SQLite storage engine.
 
@@ -59,12 +67,22 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python3 -m unittest discover -s tests -v
-python main.py
+python3 main.py
 ```
 
 The desktop application writes `network_logs.db` in the project directory by
 default. It requires a graphical session and should run on the host when LAN
 discovery needs the host network interface.
+
+For package-based installation, use:
+
+```bash
+pip install -e ".[desktop]"
+lan-watchtower
+```
+
+The `lan-watchtower` command starts the canonical backend health/readiness API.
+Use `python3 main.py` for the desktop monitoring application.
 
 ### Docker development
 
@@ -152,7 +170,7 @@ The navigation items establish the future dashboard surface, while the current
 scanner and port-check workflows remain the active functionality.
 
 Dashboard statistics are read from the SQLite backend through
-`backend.services.dashboard_service`. Device status is updated during completed
+`src.topology.dashboard_service`. Device status is updated during completed
 scan transactions, port observations are persisted after a completed port
 check, and saved device data is loaded when the dashboard starts. Empty data is
 shown explicitly rather than replaced with sample values.

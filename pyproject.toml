@@ -16,18 +16,23 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    # Optional dependencies based on local setup, currently standard lib heavy
+    "websockets>=12.0",
 ]
 
 [project.optional-dependencies]
+desktop = [
+    "customtkinter>=5.2.2",
+    "plyer>=2.1.0",
+    "scapy>=2.5.0",
+]
 dev = [
     "pytest",
-    "scapy"
+    "scapy",
 ]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["src*"]
+include = ["src*", "backend*", "desktop*"]
 
 [project.scripts]
-lan-watchtower = "src.__main__:run_server"
+lan-watchtower = "src.api.server:main"
