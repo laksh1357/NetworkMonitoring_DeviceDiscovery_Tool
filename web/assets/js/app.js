@@ -168,6 +168,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (alerts) {
       alertsData = alerts;
       renderAlertsStream(alerts);
+      const activeCount = alerts.filter(alert => String(alert.status || 'active').toLowerCase() === 'active').length;
+      document.getElementById('sidebar-alert-count')?.replaceChildren(document.createTextNode(String(activeCount)));
     }
 
     if (scanStatus) {

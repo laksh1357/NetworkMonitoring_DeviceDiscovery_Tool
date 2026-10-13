@@ -113,6 +113,21 @@ closes its HTTP server cleanly. Docker's `restart: unless-stopped` policy can
 restart a failed process without creating a second process in the same
 container.
 
+### Monitoring and scan-job APIs
+
+Discovery jobs are persisted in SQLite and use a validated lifecycle:
+`NEW`, `VALIDATING`, `QUEUED`, `RUNNING`, `RETRY_PENDING`, `COMPLETED`,
+`FAILED`, `CANCELLED`, and `TIMED_OUT`. The API exposes:
+
+- `POST /api/scan/jobs` to validate and create a private-network job
+- `GET /api/scan/jobs` and `GET /api/scan/jobs/{id}` for status/history
+- `POST /api/scan/jobs/{id}/transition` for controlled state changes
+
+Monitoring decisions retain the measurement source, quality, confidence, and
+an explainable reason. A failed or stale probe is reported as `UNKNOWN` rather
+than being presented as confirmed offline data. Topology edges are omitted
+unless relationship evidence is collected.
+
 ### Environment variables
 
 See [.env.example](./.env.example). Supported deployment variables include:

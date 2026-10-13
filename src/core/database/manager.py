@@ -8,6 +8,9 @@ from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
+
+from src.core.models.scan_jobs import ScanJobState, validate_scan_job_transition
 
 
 class NetworkDatabase:
@@ -45,6 +48,21 @@ class NetworkDatabase:
 
                 CREATE INDEX IF NOT EXISTS idx_scan_logs_timestamp
                     ON scan_logs(timestamp DESC);
+
+                CREATE TABLE IF NOT EXISTS scan_jobs (
+                    id TEXT PRIMARY KEY,
+                    state TEXT NOT NULL CHECK (state IN (
+                        'NEW', 'VALIDATING', 'QUEUED', 'RUNNING', 'RETRY_PENDING',
+                        'COMPLETED', 'FAILED', 'CANCELLED', 'TIMED_OUT'
+                    )),
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    retry_count INTEGER NOT NULL DEFAULT 0 CHECK (retry_count >= 0),
+                    error_message TEXT
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_scan_jobs_state_updated
+                    ON scan_jobs(state, updated_at DESC);
 
                 CREATE TABLE IF NOT EXISTS port_observations (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -156,6 +174,8 @@ class NetworkDatabase:
                     latency_ms REAL,
                     packet_loss REAL,
                     source TEXT NOT NULL,
+                    interface TEXT NOT NULL DEFAULT 'auto',
+                    protocol_observations TEXT NOT NULL DEFAULT '{}',
                     evidence TEXT NOT NULL DEFAULT '{}'
                 );
 
@@ -194,6 +214,20 @@ class NetworkDatabase:
                 )
             if "latency_ms" not in columns:
                 self._connection.execute("ALTER TABLE devices ADD COLUMN latency_ms REAL")
+            observation_columns = {
+                row["name"]
+                for row in self._connection.execute(
+                    "PRAGMA table_info(network_observations)"
+                ).fetchall()
+            }
+            if "interface" not in observation_columns:
+                self._connection.execute(
+                    "ALTER TABLE network_observations ADD COLUMN interface TEXT NOT NULL DEFAULT 'auto'"
+                )
+            if "protocol_observations" not in observation_columns:
+                self._connection.execute(
+                    "ALTER TABLE network_observations ADD COLUMN protocol_observations TEXT NOT NULL DEFAULT '{}'"
+                )
             alert_columns = {
                 row["name"]
                 for row in self._connection.execute("PRAGMA table_info(alerts)").fetchall()
@@ -247,6 +281,103 @@ class NetworkDatabase:
                 (timestamp or self._timestamp(), total_devices_online),
             )
         return int(cursor.lastrowid)
+
+    def create_scan_job(
+        self, job_id: str | None = None, created_at: str | None = None
+    ) -> str:
+        """Persist a new scan job and return its identifier."""
+        identifier = job_id or str(uuid4())
+        timestamp = created_at or self._timestamp()
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO scan_jobs
+                    (id, state, created_at, updated_at, retry_count, error_message)
+                VALUES (?, 'NEW', ?, ?, 0, NULL)
+                """,
+                (identifier, timestamp, timestamp),
+            )
+        return identifier
+
+    def fetch_scan_job(self, job_id: str) -> dict[str, Any] | None:
+        """Return one persisted scan job, or ``None`` when it does not exist."""
+        if not job_id:
+            raise ValueError("job_id is required")
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM scan_jobs WHERE id = ?", (job_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def fetch_scan_jobs(
+        self, state: ScanJobState | str | None = None, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        """Return persisted scan jobs, newest updates first."""
+        if limit < 1:
+            raise ValueError("limit must be at least 1")
+        query = "SELECT * FROM scan_jobs"
+        parameters: tuple[Any, ...] = ()
+        if state is not None:
+            query += " WHERE state = ?"
+            parameters = (ScanJobState(state).value,)
+        query += " ORDER BY updated_at DESC LIMIT ?"
+        parameters += (limit,)
+        with self._lock:
+            rows = self._connection.execute(query, parameters).fetchall()
+        return [dict(row) for row in rows]
+
+    def update_scan_job_state(
+        self,
+        job_id: str,
+        state: ScanJobState | str,
+        *,
+        error_message: str | None = None,
+        retry_count: int | None = None,
+        updated_at: str | None = None,
+    ) -> dict[str, Any]:
+        """Validate and persist a scan job state transition."""
+        if not job_id:
+            raise ValueError("job_id is required")
+        target = ScanJobState(state)
+        if retry_count is not None and retry_count < 0:
+            raise ValueError("retry_count cannot be negative")
+        with self._lock, self._connection:
+            row = self._connection.execute(
+                "SELECT state FROM scan_jobs WHERE id = ?", (job_id,)
+            ).fetchone()
+            if row is None:
+                raise ValueError(f"scan job not found: {job_id}")
+            validate_scan_job_transition(row["state"], target)
+            self._connection.execute(
+                """
+                UPDATE scan_jobs
+                SET state = ?, updated_at = ?, error_message = ?,
+                    retry_count = COALESCE(?, retry_count)
+                WHERE id = ?
+                """,
+                (
+                    target.value,
+                    updated_at or self._timestamp(),
+                    error_message,
+                    retry_count if retry_count is not None else (
+                        1 if target is ScanJobState.RETRY_PENDING else None
+                    ),
+                    job_id,
+                ),
+            )
+        result = self.fetch_scan_job(job_id)
+        assert result is not None
+        return result
+
+    def get_scan_job(self, job_id: str) -> dict[str, Any] | None:
+        """Alias for :meth:`fetch_scan_job` for callers using get semantics."""
+        return self.fetch_scan_job(job_id)
+
+    def transition_scan_job(
+        self, job_id: str, state: ScanJobState | str, **kwargs: Any
+    ) -> dict[str, Any]:
+        """Alias for :meth:`update_scan_job_state`."""
+        return self.update_scan_job_state(job_id, state, **kwargs)
 
     def record_scan(self, devices: Iterable[Any], total_devices_online: int | None = None) -> int:
         """Persist discovered devices and their scan total in one transaction."""
@@ -758,8 +889,9 @@ class NetworkDatabase:
                 """
                 INSERT OR IGNORE INTO network_observations
                     (id, device_identity_id, observed_at, ip, mac, hostname, vendor,
-                     fingerprint, open_ports, latency_ms, packet_loss, source, evidence)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     fingerprint, open_ports, latency_ms, packet_loss, source, interface,
+                     protocol_observations, evidence)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     observation["observation_id"], identity_id,
@@ -767,9 +899,33 @@ class NetworkDatabase:
                     observation["mac"], observation["hostname"], observation["vendor"],
                     observation.get("fingerprint"), json.dumps(observation.get("open_ports", [])),
                     observation.get("latency_ms"), observation.get("packet_loss"),
-                    observation["source"], json.dumps(observation.get("raw_evidence", {})),
+                    observation["source"], observation.get("interface", "auto"),
+                    json.dumps(observation.get("protocol_observations", {})),
+                    json.dumps(observation.get("raw_evidence", {})),
                 ),
             )
+
+    def identity_observation_exists(self, observation_id: str) -> bool:
+        """Return whether an observation has already been durably processed."""
+        if not observation_id:
+            raise ValueError("observation_id is required")
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT 1 FROM network_observations WHERE id = ?",
+                (observation_id,),
+            ).fetchone()
+        return row is not None
+
+    def fetch_identity_observation_owner(self, observation_id: str) -> str | None:
+        """Return the owning identity for one persisted observation."""
+        if not observation_id:
+            raise ValueError("observation_id is required")
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT device_identity_id FROM network_observations WHERE id = ?",
+                (observation_id,),
+            ).fetchone()
+        return str(row["device_identity_id"]) if row else None
 
     def fetch_identity_observations(self, identity_id: str, limit: int = 100) -> list[dict[str, Any]]:
         if not identity_id or limit < 1:

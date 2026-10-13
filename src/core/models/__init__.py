@@ -4,6 +4,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .scan_jobs import ScanJobState, allowed_scan_job_transitions, validate_scan_job_transition
+
+__all__ = [
+    "Device",
+    "ScanJobState",
+    "allowed_scan_job_transitions",
+    "validate_scan_job_transition",
+]
+
 
 @dataclass(slots=True)
 class Device:
@@ -20,8 +29,11 @@ class Device:
     status: str = "Offline"
     latency_ms: float | None = None
     last_seen: str = "Never"
+    source: str = "unknown"
+    interface: str = "auto"
+    fingerprint: str | None = None
+    open_ports: tuple[int, ...] = ()
 
     def as_row(self) -> tuple[str, str, str, str, str, str, str]:
         latency = f"{self.latency_ms:.1f} ms" if self.latency_ms is not None else "-"
         return (self.ip, self.mac, self.vendor, self.hostname, self.status, latency, self.last_seen)
-

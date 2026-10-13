@@ -10,21 +10,24 @@ import socket
 import sys
 import threading
 import time
+import uuid
 import webbrowser
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from src.core.database import NetworkDatabase
-from src.core.models import Device
+from src.core.models import Device, ScanJobState
 from src.discovery.scanner import NetworkScanner, detect_local_subnet
 from src.discovery.port_scanner import scan_ports
+from src.identity import IdentityVerificationService, NetworkObservation
 
 _BASE_DIR = Path(__file__).resolve().parent.parent.parent
 _WEB_DIR = _BASE_DIR / "web"
 
 scanner = NetworkScanner()
 database = NetworkDatabase(_BASE_DIR / "network_logs.db")
+identity_service = IdentityVerificationService(database)
 
 scan_state = {
     "running": False,
@@ -102,7 +105,7 @@ class NOCRequestHandler(SimpleHTTPRequestHandler):
                     "mac": item.get("mac", "Unknown"),
                     "hostname": item.get("hostname", "Unknown"),
                     "vendor": item.get("vendor", "Unknown"),
-                    "device_type": item.get("device_type", "PC/Workstation"),
+                    "device_type": item.get("device_type", "Unknown"),
                     "custom_name": item.get("custom_name", ""),
                     "notes": item.get("notes", ""),
                     "status": status,
@@ -131,9 +134,64 @@ class NOCRequestHandler(SimpleHTTPRequestHandler):
             })
             return
 
+        if path == "/api/scan/jobs":
+            self._send_json({"jobs": database.fetch_scan_jobs()})
+            return
+
+        if path.startswith("/api/scan/jobs/"):
+            job_id = path.removeprefix("/api/scan/jobs/").strip("/")
+            if not job_id:
+                self._send_error_json("Scan job ID is required")
+                return
+            job = database.fetch_scan_job(job_id)
+            if job is None:
+                self._send_error_json("Scan job not found", code=404)
+            else:
+                self._send_json(job)
+            return
+
         if path == "/api/alerts":
             alerts = database.fetch_alerts(limit=50)
             self._send_json(alerts)
+            return
+
+        if path == "/api/topology":
+            devices = database.fetch_devices()
+            # Only return observed nodes. Edges are intentionally empty until
+            # LLDP/CDP or switch forwarding evidence is collected.
+            self._send_json({
+                "nodes": [
+                    {
+                        "id": device["ip"],
+                        "ip": device["ip"],
+                        "hostname": device.get("hostname", "Unknown"),
+                        "vendor": device.get("vendor", "Unknown"),
+                        "status": device.get("status", "Unknown"),
+                        "last_seen": device.get("last_seen", ""),
+                    }
+                    for device in devices
+                ],
+                "edges": [],
+                "relationships": "inferred nodes only; no physical connections verified",
+            })
+            return
+
+        if path == "/api/identities":
+            self._send_json({"identities": database.fetch_identities()})
+            return
+
+        if path.startswith("/api/identities/"):
+            identity_id, _, suffix = path.removeprefix("/api/identities/").partition("/")
+            identity = database.fetch_identity(identity_id)
+            if identity is None:
+                self._send_error_json("Identity not found", code=404)
+                return
+            if suffix in {"lineage", "observations"}:
+                self._send_json({"observations": database.fetch_identity_observations(identity_id)})
+            elif suffix == "conflicts":
+                self._send_json({"conflicts": database.fetch_identity_conflicts(identity_id)})
+            else:
+                self._send_json(identity)
             return
 
         if path == "/api/activity":
@@ -149,8 +207,21 @@ class NOCRequestHandler(SimpleHTTPRequestHandler):
         if path == "/api/metrics":
             db_devices = database.fetch_devices()
             total_devs = len(db_devices)
-            online_count = sum(1 for d in db_devices if in_memory_devices.get(d["ip"], Device(ip=d["ip"])).status == "Online")
+            online_count = sum(
+                1
+                for d in db_devices
+                if str(in_memory_devices.get(d["ip"], Device(ip=d["ip"], status=d.get("status", "Unknown"))).status).upper()
+                == "ONLINE"
+            )
             offline_count = total_devs - online_count
+            warning_count = sum(1 for d in db_devices if str(d.get("status", "")).upper() == "WARNING")
+            active_alerts = database.fetch_alerts(status="active", limit=500)
+            health_denominator = total_devs
+            health_percentage = (
+                round((online_count / health_denominator) * 100, 1)
+                if health_denominator
+                else 0.0
+            )
 
             types_breakdown: dict[str, int] = {}
             for d in db_devices:
@@ -161,10 +232,10 @@ class NOCRequestHandler(SimpleHTTPRequestHandler):
                 "total_devices": total_devs,
                 "online_devices": online_count,
                 "offline_devices": offline_count,
-                "degraded_devices": 1 if online_count > 0 else 0,
-                "active_alerts": 4,
-                "critical_alerts": 1,
-                "network_health": 98.5 if online_count > 0 else 100.0,
+                "degraded_devices": warning_count,
+                "active_alerts": len(active_alerts),
+                "critical_alerts": sum(1 for alert in active_alerts if str(alert.get("severity", "")).upper() == "CRITICAL"),
+                "network_health": health_percentage,
                 "devices_by_type": types_breakdown,
                 "scans_run": len(database.fetch_scan_logs(limit=500)),
             })
@@ -177,7 +248,7 @@ class NOCRequestHandler(SimpleHTTPRequestHandler):
             writer.writerow(["IP Address", "MAC Address", "Vendor", "Hostname", "Device Type", "Custom Name", "Status", "Last Seen"])
             for d in db_devices:
                 mem = in_memory_devices.get(d["ip"])
-                st = mem.status if mem else "Online"
+                st = mem.status if mem else d.get("status", "Unknown")
                 writer.writerow([d["ip"], d["mac"], d["vendor"], d["hostname"], d["device_type"], d["custom_name"], st, d["last_seen"]])
             csv_bytes = output.getvalue().encode("utf-8")
             self.send_response(200)
@@ -205,6 +276,46 @@ class NOCRequestHandler(SimpleHTTPRequestHandler):
             body = json.loads(post_bytes.decode("utf-8")) if post_bytes else {}
         except json.JSONDecodeError:
             body = {}
+
+        if path == "/api/scan/jobs":
+            import ipaddress
+            raw_subnet = body.get("subnet")
+            if not isinstance(raw_subnet, str) or not raw_subnet.strip():
+                self._send_error_json("A subnet is required")
+                return
+            try:
+                subnet = ipaddress.ip_network(raw_subnet, strict=False)
+            except ValueError as exc:
+                self._send_error_json(f"Invalid subnet range: {exc}")
+                return
+            if not subnet.is_private:
+                self._send_error_json("Scan jobs are restricted to private networks")
+                return
+            job_id = uuid.uuid4().hex
+            database.create_scan_job(job_id)
+            self._send_json(database.fetch_scan_job(job_id), code=201)
+            return
+
+        if path.startswith("/api/scan/jobs/") and path.endswith("/transition"):
+            job_id = path.removeprefix("/api/scan/jobs/").removesuffix("/transition").strip("/")
+            target = body.get("state")
+            if not job_id or not isinstance(target, str):
+                self._send_error_json("Job ID and target state are required")
+                return
+            try:
+                job = database.update_scan_job_state(
+                    job_id,
+                    ScanJobState(target),
+                    error_message=body.get("error_message"),
+                )
+            except ValueError as exc:
+                if "not found" in str(exc):
+                    self._send_error_json("Scan job not found", code=404)
+                else:
+                    self._send_error_json(str(exc))
+                return
+            self._send_json(job)
+            return
 
         if path == "/api/scan/start":
             if scanner.running:
@@ -245,6 +356,24 @@ class NOCRequestHandler(SimpleHTTPRequestHandler):
                     hostname=dev.hostname,
                     vendor=dev.vendor,
                     device_type=dev.device_type,
+                )
+                identity_service.process(
+                    NetworkObservation(
+                        ip=dev.ip,
+                        mac=dev.mac,
+                        hostname=dev.hostname,
+                        vendor=dev.vendor,
+                        device_type=dev.device_type,
+                        open_ports=dev.open_ports,
+                        latency_ms=dev.latency_ms,
+                        source=dev.source,
+                        interface=dev.interface,
+                        fingerprint=dev.fingerprint,
+                        raw_evidence={
+                            "collector": "src.discovery.scanner.NetworkScanner",
+                            "scan_subnet": str(sub),
+                        },
+                    )
                 )
                 database.insert_alert("INFO", "Live Device Discovered", f"Real-time node online: {dev.ip} ({dev.hostname})", dev.ip)
 

@@ -254,11 +254,14 @@ class NetworkScanner:
             ip = str(address)
             mac = arp_devices.get(ip, "Unknown")
             online = bool(mac != "Unknown")
+            source = "ARP" if online else "ICMP"
             latency: float | None = None
             if not online:
                 online, latency = ping_host(ip, self.host_timeout)
             if not online:
                 online = self._tcp_probe(ip)
+                if online:
+                    source = "TCP"
             if online and mac == "Unknown":
                 mac = resolve_mac_from_arp(ip)
             with lock:
@@ -278,6 +281,7 @@ class NetworkScanner:
                 latency_ms=latency,
                 last_seen=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 device_type=d_type,
+                source=source,
             )
             if on_device_found is not None:
                 on_device_found(dev)

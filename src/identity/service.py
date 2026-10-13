@@ -23,8 +23,12 @@ class IdentityVerificationService:
         self.engine = engine or EvidenceCorrelatedIdentityEngine()
 
     def process(self, observation: NetworkObservation) -> str:
-        record = self.engine.observe(observation)
         normalized = observation.normalized()
+        if self.database.identity_observation_exists(normalized.observation_id):
+            existing = self.database.fetch_identity_observation_owner(normalized.observation_id)
+            if existing is not None:
+                return existing
+        record = self.engine.observe(observation)
         self.database.save_identity(
             record.identity_id,
             self.engine.identity_key(normalized),
