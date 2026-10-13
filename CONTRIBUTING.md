@@ -3,7 +3,7 @@
 Thank you for your interest in contributing to LAN Watchtower! We welcome pull requests, bug reports, and research proposals.
 
 ## 1. Code of Conduct
-All contributors are expected to adhere to professional engineering standards. Be respectful in discussions, provide clear justifications for architectural changes, and prioritize constructive feedback.
+All contributors are expected to adhere to professional engineering standards. Be respectful in discussions, provide clear justifications for architectural changes, and prioritize constructive feedbacks.
 
 ## 2. Getting Started
 1. Fork the repository.
