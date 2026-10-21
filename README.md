@@ -97,18 +97,21 @@ The static frontend is available at `http://localhost:8080`. The backend
 health API is available at `http://localhost:8000/health` and
 `http://localhost:8000/ready`.
 
-### Public static dashboard (GitHub Pages)
+### Public static dashboard (Vercel)
 
-The [Pages workflow](./.github/workflows/pages.yml) publishes the `web/`
-directory whenever changes are pushed to `main`. In the repository's
-**Settings > Pages**, set the build and deployment source to **GitHub Actions**.
-After the workflow succeeds, the site is available at
-`https://laksh1357.github.io/NetworkMonitoring_DeviceDiscovery_Tool/`.
+The repository includes a [Vercel configuration](./vercel.json) that publishes
+the static site from `web/`. To deploy it, import this GitHub repository at
+[vercel.com/new](https://vercel.com/new), keep the project root set to the
+repository root, and deploy. Vercel can then build and publish future pushes
+to `main` automatically. The public URL is assigned by Vercel when the project
+is created.
 
-This publishes only the static dashboard; it does not deploy the backend or
-provide live LAN discovery. The monitoring process must run on an authorized
-host with access to the network being monitored. Do not expose the backend
-publicly without TLS and authentication.
+Vercel's free Hobby plan is suitable for a personal static demo, subject to
+Vercel's current limits and terms; free hosting is not guaranteed to remain
+free forever. This publishes only the dashboard, not the backend or live LAN
+discovery. The monitoring process must run on an authorized host with access
+to the network being monitored. Do not expose the backend publicly without
+TLS and authentication.
 
 ### Production deployment
 
