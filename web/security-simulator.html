@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Security Telemetry Concept Demo - LAN Watchtower</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 0.3; transform: scale(1); }
+      50% { opacity: 0.8; transform: scale(1.05); }
+    }
+    .pulse-effect { animation: pulse-glow 2s infinite ease-in-out; }
+    .glass-card {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(51, 65, 85, 0.5);
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen">
+
+  <!-- Top Header Navigation -->
+  <header class="border-b border-slate-800 bg-slate-900/80 sticky top-0 z-50 backdrop-blur-md px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="p-2 bg-cyan-500/10 border border-cyan-500/30 rounded-lg text-cyan-400">
+        <i data-lucide="shield-check" class="w-6 h-6"></i>
+      </div>
+      <div>
+        <h1 class="font-bold text-lg text-slate-100 tracking-wide flex items-center gap-2">
+          LAN WATCHTOWER <span class="text-xs bg-cyan-500/20 text-cyan-400 px-2 py-0.5 rounded border border-cyan-500/30 font-mono">CONCEPT DEMO</span>
+        </h1>
+        <p class="text-xs text-slate-400">Illustrative network security and storage telemetry interface</p>
+      </div>
+    </div>
+
+    <!-- Demo status and challenge preview -->
+    <div class="flex items-center gap-4">
+      <a href="index.html" class="text-xs text-cyan-300 hover:text-cyan-100 underline">Back to dashboard</a>
+      <button onclick="openTatkalModal()" class="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-lg hover:bg-amber-500/20 transition text-xs font-semibold">
+        <i data-lucide="lock" class="w-4 h-4"></i> Verification UI Demo
+      </button>
+      <div class="flex items-center gap-2 bg-slate-800/80 border border-slate-700 px-3 py-1.5 rounded-lg text-xs">
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+        <span class="text-slate-300 font-medium">Sample data only — no integrity check</span>
+      </div>
+    </div>
+  </header>
+
+  <aside role="note" class="mx-6 mt-4 rounded-lg border border-amber-500/40 bg-amber-950/60 p-4 text-sm text-amber-100">
+    <strong>Demo only:</strong> Metrics, topology, challenge values, and event entries on this page are illustrative or generated in your browser. This page does not scan devices, measure system storage, authenticate users, encrypt records, verify a Merkle chain, operate a honeypot, or protect administrative actions.
+  </aside>
+
+  <!-- Main Container -->
+  <main class="p-6 max-w-[1700px] mx-auto space-y-6">
+
+    <!-- Top Security Metrics Dashboard -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="glass-card p-4 rounded-xl flex items-center justify-between">
+        <div>
+          <p class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Illustrative Security Score</p>
+          <p class="text-2xl font-bold text-emerald-400 mt-1">98 / 100</p>
+          <span class="text-[10px] text-emerald-500/80">Demo value; no crypto verification</span>
+        </div>
+        <div class="w-12 h-12 bg-emerald-500/10 border border-emerald-500/30 rounded-full flex items-center justify-center text-emerald-400">
+          <i data-lucide="shield" class="w-6 h-6"></i>
+        </div>
+      </div>
+
+      <div class="glass-card p-4 rounded-xl flex items-center justify-between">
+        <div>
+          <p class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Challenge UI Preview</p>
+          <p class="text-2xl font-bold text-cyan-400 mt-1">15s Window</p>
+          <span class="text-[10px] text-cyan-500/80">No authentication is performed</span>
+        </div>
+        <div class="w-12 h-12 bg-cyan-500/10 border border-cyan-500/30 rounded-full flex items-center justify-center text-cyan-400">
+          <i data-lucide="key-round" class="w-6 h-6"></i>
+        </div>
+      </div>
+
+      <div class="glass-card p-4 rounded-xl flex items-center justify-between">
+        <div>
+          <p class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Sample Decoy Nodes</p>
+          <p class="text-2xl font-bold text-amber-400 mt-1">4 Illustrative Nodes</p>
+          <span class="text-[10px] text-amber-500/80">Not connected to a honeypot</span>
+        </div>
+        <div class="w-12 h-12 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center text-amber-400">
+          <i data-lucide="radar" class="w-6 h-6"></i>
+        </div>
+      </div>
+
+      <div class="glass-card p-4 rounded-xl flex items-center justify-between">
+        <div>
+          <p class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Sample Storage Zones</p>
+          <p class="text-2xl font-bold text-indigo-400 mt-1">4 Partition Zones</p>
+          <span class="text-[10px] text-indigo-500/80">Not connected to system storage</span>
+        </div>
+        <div class="w-12 h-12 bg-indigo-500/10 border border-indigo-500/30 rounded-full flex items-center justify-center text-indigo-400">
+          <i data-lucide="hard-drive" class="w-6 h-6"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 1: Simulated storage telemetry -->
+    <section class="glass-card p-5 rounded-xl border border-slate-800">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-base font-bold text-slate-100 flex items-center gap-2">
+            <i data-lucide="database" class="w-5 h-5 text-indigo-400"></i>
+            Section-Wise Storage Telemetry (Simulated)
+          </h2>
+          <p class="text-xs text-slate-400">Illustrative values generated in this browser; not actual disk or network measurements</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-slate-400">Simulated updates: 2000ms</span>
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+        </div>
+      </div>
+
+      <!-- Grid of 4 Storage Sections -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+
+        <!-- Partition 1: OS Root -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-lg p-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold text-cyan-400 font-mono">SECTION 01: / (ROOT OS)</span>
+            <span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded">ext4</span>
+          </div>
+          <div class="space-y-2">
+            <div class="flex justify-between text-xs">
+              <span class="text-slate-400">Capacity</span>
+              <span class="font-mono text-slate-200" id="root-cap">42.5 / 120 GB</span>
+            </div>
+            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+              <div id="root-bar" class="bg-cyan-500 h-full transition-all duration-500" style="width: 35%"></div>
+            </div>
+            <div class="flex justify-between text-[11px] font-mono text-slate-400 pt-1 border-t border-slate-800/80">
+              <span>Read: <span id="root-read" class="text-cyan-400">1.2 MB/s</span></span>
+              <span>Write: <span id="root-write" class="text-emerald-400">0.4 MB/s</span></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Partition 2: Telemetry -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-lg p-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold text-amber-400 font-mono">SECTION 02: /var/log/network</span>
+            <span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded">zfs</span>
+          </div>
+          <div class="space-y-2">
+            <div class="flex justify-between text-xs">
+              <span class="text-slate-400">Capacity</span>
+              <span class="font-mono text-slate-200" id="net-cap">180.2 / 500 GB</span>
+            </div>
+            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+              <div id="net-bar" class="bg-amber-500 h-full transition-all duration-500" style="width: 36%"></div>
+            </div>
+            <div class="flex justify-between text-[11px] font-mono text-slate-400 pt-1 border-t border-slate-800/80">
+              <span>Read: <span id="net-read" class="text-amber-400">14.8 MB/s</span></span>
+              <span>Write: <span id="net-write" class="text-emerald-400">8.1 MB/s</span></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Partition 3: Encrypted Vault -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-lg p-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold text-purple-400 font-mono">SECTION 03: /data/vault</span>
+            <span class="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded border border-purple-500/30">Demo label only</span>
+          </div>
+          <div class="space-y-2">
+            <div class="flex justify-between text-xs">
+              <span class="text-slate-400">Capacity</span>
+              <span class="font-mono text-slate-200" id="vault-cap">12.1 / 50 GB</span>
+            </div>
+            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+              <div id="vault-bar" class="bg-purple-500 h-full transition-all duration-500" style="width: 24%"></div>
+            </div>
+            <div class="flex justify-between text-[11px] font-mono text-slate-400 pt-1 border-t border-slate-800/80">
+              <span>Read: <span id="vault-read" class="text-purple-400">0.1 MB/s</span></span>
+              <span>Write: <span id="vault-write" class="text-emerald-400">0.05 MB/s</span></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Partition 4: Isolated Quarantine Zone -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-lg p-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold text-rose-400 font-mono">SECTION 04: /mnt/quarantine</span>
+            <span class="text-[10px] bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded border border-rose-500/30">ISOLATED</span>
+          </div>
+          <div class="space-y-2">
+            <div class="flex justify-between text-xs">
+              <span class="text-slate-400">Capacity</span>
+              <span class="font-mono text-slate-200" id="quar-cap">1.8 / 100 GB</span>
+            </div>
+            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+              <div id="quar-bar" class="bg-rose-500 h-full transition-all duration-500" style="width: 2%"></div>
+            </div>
+            <div class="flex justify-between text-[11px] font-mono text-slate-400 pt-1 border-t border-slate-800/80">
+              <span>Read: <span id="quar-read" class="text-slate-500">0.0 MB/s</span></span>
+              <span>Write: <span id="quar-write" class="text-rose-400">0.0 MB/s</span></span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Section 2: Interactive Topology & Real-Time Cyber Terminal -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- Network Topology Map (2 Columns) -->
+      <div class="lg:col-span-2 glass-card p-5 rounded-xl border border-slate-800 relative">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-base font-bold text-slate-100 flex items-center gap-2">
+            <i data-lucide="network" class="w-5 h-5 text-cyan-400"></i>
+            Example Topology (Not Scanned)
+          </h2>
+          <span class="text-xs bg-slate-800 px-2.5 py-1 rounded text-slate-300 font-mono">Example subnet: 192.168.1.0/24</span>
+        </div>
+
+        <!-- Canvas Map -->
+        <div class="w-full h-80 bg-slate-950 rounded-lg border border-slate-800 relative overflow-hidden flex items-center justify-center">
+          <canvas id="topologyCanvas" width="800" height="320" class="w-full h-full"></canvas>
+        </div>
+      </div>
+
+      <!-- Simulated event log -->
+      <div class="glass-card p-5 rounded-xl border border-slate-800 flex flex-col h-full">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-base font-bold text-slate-100 flex items-center gap-2">
+            <i data-lucide="terminal" class="w-5 h-5 text-emerald-400"></i>
+            Simulated Event Log
+          </h2>
+          <span class="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded font-mono">CLIENT-SIDE SIMULATION</span>
+        </div>
+
+        <div id="terminalLog" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg p-3 font-mono text-xs text-slate-300 space-y-2 overflow-y-auto max-h-72">
+          <div class="text-slate-500">[DEMO] Example event log; no Merkle tree is created.</div>
+          <div class="text-emerald-400">[SAMPLE] Illustrative packet event; no packet was inspected.</div>
+          <div class="text-slate-400">[SAMPLE] No data was written to system storage.</div>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Client-side challenge UI preview -->
+  <div id="tatkalModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md hidden z-50 flex items-center justify-center">
+    <div class="glass-card p-6 rounded-xl border border-amber-500/30 w-full max-w-md space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold text-amber-400 flex items-center gap-2">
+          <i data-lucide="shield-alert" class="w-5 h-5"></i> Challenge UI Preview
+        </h3>
+        <button onclick="closeTatkalModal()" class="text-slate-400 hover:text-white">&times;</button>
+      </div>
+      <p class="text-xs text-slate-300">
+        This is a UI-only challenge preview. The value is generated in your browser and is not validated; it does not authenticate or authorize any action.
+      </p>
+
+      <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 font-mono text-center">
+        <span class="text-xs text-slate-500">DYNAMIC TIME WINDOW</span>
+        <div id="timer" class="text-2xl font-bold text-amber-400 my-1">15.0s</div>
+        <div class="text-xs text-slate-400">Example challenge value: <span id="challengeHash" class="text-cyan-400">0x8f...3a2</span></div>
+      </div>
+
+      <div class="space-y-2">
+        <label class="text-xs text-slate-400">Demo input (not validated):</label>
+        <input type="text" placeholder="e.g. SEC-9821" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+      </div>
+
+      <button onclick="closeTatkalModal()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2 rounded text-sm transition">
+        Close demo
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // Initialize Lucide Icons
+    lucide.createIcons();
+
+    // Challenge preview only; no authentication is performed.
+    let timerInterval;
+    function openTatkalModal() {
+      document.getElementById('tatkalModal').classList.remove('hidden');
+      let timeLeft = 15.0;
+      document.getElementById('challengeHash').innerText = '0x' + Math.random().toString(16).substr(2, 8);
+      clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        timeLeft -= 0.1;
+        if(timeLeft <= 0) {
+          timeLeft = 15.0;
+          document.getElementById('challengeHash').innerText = '0x' + Math.random().toString(16).substr(2, 8);
+        }
+        document.getElementById('timer').innerText = timeLeft.toFixed(1) + 's';
+      }, 100);
+    }
+
+    function closeTatkalModal() {
+      document.getElementById('tatkalModal').classList.add('hidden');
+      clearInterval(timerInterval);
+    }
+
+    // Generate illustrative client-side telemetry values.
+    setInterval(() => {
+      // Root update
+      const rootRead = (Math.random() * 3).toFixed(1);
+      const rootWrite = (Math.random() * 1).toFixed(1);
+      document.getElementById('root-read').innerText = rootRead + ' MB/s';
+      document.getElementById('root-write').innerText = rootWrite + ' MB/s';
+
+      // Telemetry update
+      const netRead = (10 + Math.random() * 8).toFixed(1);
+      const netWrite = (5 + Math.random() * 5).toFixed(1);
+      document.getElementById('net-read').innerText = netRead + ' MB/s';
+      document.getElementById('net-write').innerText = netWrite + ' MB/s';
+
+      // Append a sample event; this does not create a cryptographic hash chain.
+      const terminal = document.getElementById('terminalLog');
+      const time = new Date().toLocaleTimeString();
+      const randomHash = '0x' + Math.random().toString(16).substr(2, 8);
+      const entry = document.createElement('div');
+      entry.className = 'text-xs text-slate-400';
+      const timeLabel = document.createElement('span');
+      timeLabel.className = 'text-slate-500';
+      timeLabel.textContent = `[${time}] `;
+      const valueLabel = document.createElement('span');
+      valueLabel.className = 'text-cyan-400';
+      valueLabel.textContent = randomHash;
+      entry.append(timeLabel, document.createTextNode('Demo event '), valueLabel, document.createTextNode(' generated in this browser.'));
+      terminal.appendChild(entry);
+      if(terminal.children.length > 8) terminal.removeChild(terminal.firstChild);
+      terminal.scrollTop = terminal.scrollHeight;
+    }, 2000);
+
+    // Dynamic Topology Render
+    const canvas = document.getElementById('topologyCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function drawTopology() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Node positions
+      const nodes = [
+        { x: 400, y: 160, label: "Core Router", color: "#06b6d4" },
+        { x: 250, y: 80, label: "DB Server", color: "#a855f7" },
+        { x: 250, y: 240, label: "IoT Gateway", color: "#3b82f6" },
+        { x: 550, y: 80, label: "Sample Decoy Node", color: "#f59e0b" },
+        { x: 550, y: 240, label: "Workstation", color: "#10b981" }
+      ];
+
+      // Draw Connections
+      nodes.forEach((node, index) => {
+        if(index !== 0) {
+          ctx.beginPath();
+          ctx.moveTo(nodes[0].x, nodes[0].y);
+          ctx.lineTo(node.x, node.y);
+          ctx.strokeStyle = "rgba(51, 65, 85, 0.6)";
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+      });
+
+      // Draw Nodes
+      nodes.forEach(node => {
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, 16, 0, Math.PI * 2);
+        ctx.fillStyle = node.color + "22";
+        ctx.fill();
+        ctx.strokeStyle = node.color;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = "#f8fafc";
+        ctx.font = "11px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(node.label, node.x, node.y + 30);
+      });
+    }
+
+    drawTopology();
+  </script>
+</body>
+</html>

@@ -4,7 +4,7 @@ A desktop network monitoring and device discovery tool built with Python and Cus
 
 ## Project Website
 
-Visit the [LAN Watchtower project website](https://laksh1357.github.io/NetworkMonitoring_DeviceDiscovery_Tool/) for an overview of the network detection workflow and capabilities.
+Visit the [LAN Watchtower project website](https://network-monitoring-device-discovery-six.vercel.app/) for an overview of the network detection workflow and capabilities.
 
 ## Project structure
 
@@ -19,6 +19,7 @@ Visit the [LAN Watchtower project website](https://laksh1357.github.io/NetworkMo
 ├── main.py             # compatibility desktop launcher
 ├── database_manager.py # compatibility persistence entry point
 ├── web/                # canonical static frontend
+│   ├── security-simulator.html # illustrative security UI demo; generated sample values only
 │   ├── assets/
 │   ├── components/
 │   └── pages/
@@ -26,6 +27,12 @@ Visit the [LAN Watchtower project website](https://laksh1357.github.io/NetworkMo
 ├── pyproject.toml
 └── requirements.txt
 ```
+
+The [Security Concept Demo](./web/security-simulator.html) is a standalone
+visual prototype linked from the main dashboard. Its telemetry, challenge,
+topology, and event log are illustrative only; it does not perform device
+discovery, authentication, encryption, honeypot monitoring, or integrity
+verification.
 
 The canonical package is organized by application responsibility:
 
