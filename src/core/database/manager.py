@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import sqlite3
 import threading
 from collections.abc import Iterable
@@ -11,6 +13,7 @@ from typing import Any
 from uuid import uuid4
 
 from src.core.models.scan_jobs import ScanJobState, validate_scan_job_transition
+from src.security.merkle import event_leaf_hash, merkle_frontier_root, merkle_root
 
 
 class NetworkDatabase:
@@ -202,6 +205,50 @@ class NetworkDatabase:
                     timestamp TEXT NOT NULL,
                     promotion_status TEXT NOT NULL DEFAULT 'QUARANTINED'
                 );
+
+                CREATE TABLE IF NOT EXISTS audit_events (
+                    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                    occurred_at TEXT NOT NULL,
+                    actor TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    details_json TEXT NOT NULL,
+                    leaf_hash TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS audit_checkpoints (
+                    sequence INTEGER PRIMARY KEY,
+                    root_hash TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS audit_merkle_frontier (
+                    level INTEGER PRIMARY KEY,
+                    node_hash TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS activity_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_name TEXT NOT NULL,
+                    action_type TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    ip TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS user_profile (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    display_name TEXT NOT NULL,
+                    role_title TEXT NOT NULL,
+                    email TEXT NOT NULL,
+                    avatar_initials TEXT NOT NULL
+                );
+                """
+            )
+            self._connection.execute(
+                """
+                INSERT OR IGNORE INTO user_profile
+                    (id, display_name, role_title, email, avatar_initials)
+                VALUES (1, 'Local Admin', 'Administrator', '', 'LA')
                 """
             )
             columns = {
@@ -214,6 +261,14 @@ class NetworkDatabase:
                 )
             if "latency_ms" not in columns:
                 self._connection.execute("ALTER TABLE devices ADD COLUMN latency_ms REAL")
+            for column, definition in (
+                ("device_type", "TEXT NOT NULL DEFAULT 'Unknown'"),
+                ("custom_name", "TEXT NOT NULL DEFAULT ''"),
+                ("notes", "TEXT NOT NULL DEFAULT ''"),
+                ("location", "TEXT NOT NULL DEFAULT 'Main Network'"),
+            ):
+                if column not in columns:
+                    self._connection.execute(f"ALTER TABLE devices ADD COLUMN {column} {definition}")
             observation_columns = {
                 row["name"]
                 for row in self._connection.execute(
@@ -240,6 +295,33 @@ class NetworkDatabase:
                 self._connection.execute(
                     "ALTER TABLE alerts ADD COLUMN acknowledged INTEGER NOT NULL DEFAULT 0"
                 )
+            self._migrate_audit_merkle_frontier()
+
+    def _migrate_audit_merkle_frontier(self) -> None:
+        events = self._connection.execute(
+            "SELECT sequence, leaf_hash FROM audit_events ORDER BY sequence"
+        ).fetchall()
+        frontier_rows = self._connection.execute(
+            "SELECT level FROM audit_merkle_frontier"
+        ).fetchall()
+        if not events or frontier_rows:
+            return
+
+        frontier: dict[int, bytes] = {}
+        for expected_sequence, event in enumerate(events, start=1):
+            if event["sequence"] != expected_sequence:
+                raise ValueError("Cannot rebuild the audit Merkle frontier from a non-contiguous log")
+            node = bytes.fromhex(event["leaf_hash"])
+            level = 0
+            while level in frontier:
+                node = hashlib.sha256(frontier.pop(level) + node).digest()
+                level += 1
+            frontier[level] = node
+        merkle_frontier_root(frontier, len(events))
+        self._connection.executemany(
+            "INSERT INTO audit_merkle_frontier (level, node_hash) VALUES (?, ?)",
+            [(level, node.hex()) for level, node in frontier.items()],
+        )
 
     @staticmethod
     def _timestamp() -> str:
@@ -252,24 +334,158 @@ class NetworkDatabase:
         hostname: str = "Unknown",
         vendor: str = "Unknown",
         seen_at: str | None = None,
+        device_type: str = "Unknown",
+        custom_name: str = "",
+        notes: str = "",
+        location: str = "Main Network",
     ) -> None:
         """Insert a device or update its current identity and last-seen time."""
         timestamp = seen_at or self._timestamp()
         with self._lock, self._connection:
             self._connection.execute(
                 """
-                INSERT INTO devices (ip, mac, hostname, vendor, status, latency_ms, first_seen, last_seen)
-                VALUES (?, ?, ?, ?, 'Online', ?, ?, ?)
+                INSERT INTO devices
+                    (ip, mac, hostname, vendor, status, latency_ms, first_seen, last_seen,
+                     device_type, custom_name, notes, location)
+                VALUES (?, ?, ?, ?, 'Online', ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(ip) DO UPDATE SET
                     mac = excluded.mac,
                     hostname = excluded.hostname,
                     vendor = excluded.vendor,
                     status = 'Online',
                     latency_ms = excluded.latency_ms,
-                    last_seen = excluded.last_seen
+                    last_seen = excluded.last_seen,
+                    device_type = excluded.device_type
                 """,
-                (ip, mac or "Unknown", hostname or "Unknown", vendor or "Unknown", None, timestamp, timestamp),
+                (
+                    ip, mac or "Unknown", hostname or "Unknown", vendor or "Unknown",
+                    None, timestamp, timestamp, device_type or "Unknown",
+                    custom_name, notes, location or "Main Network",
+                ),
             )
+
+    def update_device_meta(
+        self,
+        ip: str,
+        custom_name: str = "",
+        notes: str = "",
+        device_type: str | None = None,
+        hostname: str | None = None,
+        vendor: str | None = None,
+        mac: str | None = None,
+        location: str | None = None,
+    ) -> None:
+        if not ip:
+            raise ValueError("ip is required")
+        with self._lock, self._connection:
+            cursor = self._connection.execute(
+                """
+                UPDATE devices SET
+                    custom_name = ?, notes = ?,
+                    device_type = COALESCE(?, device_type),
+                    hostname = COALESCE(?, hostname),
+                    vendor = COALESCE(?, vendor),
+                    mac = COALESCE(?, mac),
+                    location = COALESCE(?, location)
+                WHERE ip = ?
+                """,
+                (custom_name, notes, device_type, hostname, vendor, mac, location, ip),
+            )
+            if cursor.rowcount == 0:
+                raise ValueError(f"device not found: {ip}")
+
+    def delete_device(self, ip: str) -> None:
+        if not ip:
+            raise ValueError("ip is required")
+        with self._lock, self._connection:
+            cursor = self._connection.execute("DELETE FROM devices WHERE ip = ?", (ip,))
+            if cursor.rowcount == 0:
+                raise ValueError(f"device not found: {ip}")
+
+    def insert_activity_log(
+        self,
+        user_name: str,
+        action_type: str,
+        description: str,
+        ip: str = "",
+    ) -> None:
+        if not user_name or not action_type:
+            raise ValueError("user_name and action_type are required")
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO activity_logs (user_name, action_type, description, ip, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (user_name, action_type, description, ip, self._timestamp()),
+            )
+
+    def fetch_activity_logs(self, limit: int = 100) -> list[dict[str, Any]]:
+        if limit < 1:
+            raise ValueError("limit must be at least 1")
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT id, user_name, action_type, description, ip, created_at
+                FROM activity_logs ORDER BY created_at DESC, id DESC LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def get_user_profile(self) -> dict[str, Any]:
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT display_name, role_title, email, avatar_initials
+                FROM user_profile WHERE id = 1
+                """
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("Local administrator profile is missing")
+        return dict(row)
+
+    def update_user_profile(
+        self,
+        display_name: str,
+        role_title: str,
+        email: str,
+        avatar_initials: str,
+    ) -> None:
+        if not display_name.strip() or not role_title.strip():
+            raise ValueError("display_name and role_title are required")
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                UPDATE user_profile
+                SET display_name = ?, role_title = ?, email = ?, avatar_initials = ?
+                WHERE id = 1
+                """,
+                (display_name, role_title, email, avatar_initials),
+            )
+
+    def clear_database(self) -> None:
+        """Clear network data while preserving the administrator and audit evidence."""
+        tables = (
+            "devices",
+            "scan_logs",
+            "scan_jobs",
+            "port_observations",
+            "port_states",
+            "port_events",
+            "alerts",
+            "notification_deliveries",
+            "health_history",
+            "device_events",
+            "device_identities",
+            "network_observations",
+            "identity_conflicts",
+            "unresolved_behavior",
+            "activity_logs",
+        )
+        with self._lock, self._connection:
+            for table in tables:
+                self._connection.execute(f"DELETE FROM {table}")
 
     def insert_scan_record(self, total_devices_online: int, timestamp: str | None = None) -> int:
         """Insert one scan session and return its database id."""
@@ -534,7 +750,7 @@ class NetworkDatabase:
 
     def fetch_devices(self, limit: int | None = None) -> list[dict[str, Any]]:
         """Return known devices ordered by most recently seen."""
-        query = "SELECT ip, mac, hostname, vendor, status, latency_ms, first_seen, last_seen FROM devices ORDER BY last_seen DESC"
+        query = "SELECT * FROM devices ORDER BY last_seen DESC"
         parameters: tuple[int, ...] = ()
         if limit is not None:
             if limit < 1:
@@ -854,6 +1070,149 @@ class NetworkDatabase:
     def close(self) -> None:
         with self._lock:
             self._connection.close()
+
+    def append_audit_event(
+        self,
+        actor: str,
+        action: str,
+        details: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Append an event and persist the current SHA-256 Merkle root."""
+        import json
+
+        if not actor.strip() or not action.strip():
+            raise ValueError("actor and action are required")
+        timestamp = self._timestamp()
+        details_json = json.dumps(details or {}, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        with self._lock, self._connection:
+            sequence = int(
+                self._connection.execute(
+                    "SELECT COALESCE(MAX(sequence), 0) + 1 FROM audit_events"
+                ).fetchone()[0]
+            )
+            event = {
+                "sequence": sequence,
+                "occurred_at": timestamp,
+                "actor": actor,
+                "action": action,
+                "details": json.loads(details_json),
+            }
+            leaf_hash = event_leaf_hash(event)
+            self._connection.execute(
+                """
+                INSERT INTO audit_events
+                    (sequence, occurred_at, actor, action, details_json, leaf_hash)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (sequence, timestamp, actor, action, details_json, leaf_hash),
+            )
+            frontier = {
+                row["level"]: bytes.fromhex(row["node_hash"])
+                for row in self._connection.execute(
+                    "SELECT level, node_hash FROM audit_merkle_frontier"
+                ).fetchall()
+            }
+            node = bytes.fromhex(leaf_hash)
+            level = 0
+            while level in frontier:
+                left = frontier.pop(level)
+                self._connection.execute(
+                    "DELETE FROM audit_merkle_frontier WHERE level = ?",
+                    (level,),
+                )
+                node = hashlib.sha256(left + node).digest()
+                level += 1
+            frontier[level] = node
+            self._connection.execute(
+                """
+                INSERT INTO audit_merkle_frontier (level, node_hash)
+                VALUES (?, ?)
+                """,
+                (level, node.hex()),
+            )
+            root_hash = merkle_frontier_root(frontier, sequence)
+            self._connection.execute(
+                """
+                INSERT INTO audit_checkpoints (sequence, root_hash, created_at)
+                VALUES (?, ?, ?)
+                """,
+                (sequence, root_hash, timestamp),
+            )
+        return {**event, "leaf_hash": leaf_hash, "merkle_root": root_hash}
+
+    def fetch_audit_events(self, limit: int = 100) -> list[dict[str, Any]]:
+        import json
+
+        if limit < 1:
+            raise ValueError("limit must be at least 1")
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT sequence, occurred_at, actor, action, details_json, leaf_hash
+                FROM audit_events ORDER BY sequence DESC LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [
+            {
+                "sequence": row["sequence"],
+                "occurred_at": row["occurred_at"],
+                "actor": row["actor"],
+                "action": row["action"],
+                "details": json.loads(row["details_json"]),
+                "leaf_hash": row["leaf_hash"],
+            }
+            for row in rows
+        ]
+
+    def verify_audit_log(self) -> dict[str, Any]:
+        import json
+
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT sequence, occurred_at, actor, action, details_json, leaf_hash
+                FROM audit_events ORDER BY sequence
+                """
+            ).fetchall()
+            checkpoint = self._connection.execute(
+                """
+                SELECT sequence, root_hash FROM audit_checkpoints
+                ORDER BY sequence DESC LIMIT 1
+                """
+            ).fetchone()
+        leaves: list[str] = []
+        valid = True
+        for expected_sequence, row in enumerate(rows, start=1):
+            event = {
+                "sequence": row["sequence"],
+                "occurred_at": row["occurred_at"],
+                "actor": row["actor"],
+                "action": row["action"],
+                "details": json.loads(row["details_json"]),
+            }
+            leaf_hash = event_leaf_hash(event)
+            leaves.append(leaf_hash)
+            if row["sequence"] != expected_sequence or not hmac.compare_digest(leaf_hash, row["leaf_hash"]):
+                valid = False
+        root_hash = merkle_root(leaves)
+        if rows:
+            valid = bool(
+                valid
+                and checkpoint
+                and checkpoint["sequence"] == len(rows)
+                and hmac.compare_digest(root_hash, checkpoint["root_hash"])
+            )
+        elif checkpoint:
+            valid = False
+        return {
+            "valid": valid,
+            "event_count": len(rows),
+            "merkle_root": root_hash,
+            "checkpoint_sequence": checkpoint["sequence"] if checkpoint else None,
+            "checked_at": self._timestamp(),
+            "scope": "database-local integrity check; not externally anchored",
+        }
 
     def save_identity(self, identity_id: str, identity_key: str, state: str,
                       confidence: float, created_at: str | None = None) -> None:

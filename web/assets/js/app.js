@@ -1,6 +1,13 @@
 (() => {
   const refreshIntervalMs = 5000;
-  const state = { devices: [], topologyNodes: [], scanRunning: false };
+  const state = {
+    devices: [],
+    topologyNodes: [],
+    scanRunning: false,
+    topologyPositions: new Map(),
+    topologyTransform: { zoom: 1, panX: 0, panY: 0 },
+    topologyDrag: null,
+  };
   const elements = {
     connection: document.getElementById('connection-status'),
     connectionLabel: document.getElementById('connection-label'),
@@ -34,11 +41,16 @@
   async function requestJSON(path, options = {}) {
     const response = await fetch(path, {
       ...options,
-      headers: { Accept: 'application/json', ...options.headers },
+      headers: {
+        Accept: 'application/json',
+        ...window.watchtowerAuth?.headers(),
+        ...options.headers,
+      },
     });
     const contentType = response.headers.get('content-type') || '';
     const body = contentType.includes('application/json') ? await response.json() : null;
     if (!response.ok) {
+      if (response.status === 401) window.watchtowerAuth?.refresh();
       throw new Error(body?.error || `Request failed (${response.status})`);
     }
     if (!body) throw new Error(`Expected JSON from ${path}`);
@@ -186,12 +198,20 @@
     if (!state.topologyNodes.length) return;
 
     const columns = Math.max(1, Math.floor(width / 150));
+    const rowCount = Math.ceil(state.topologyNodes.length / columns);
+    context.save();
+    context.translate(state.topologyTransform.panX, state.topologyTransform.panY);
+    context.scale(state.topologyTransform.zoom, state.topologyTransform.zoom);
     state.topologyNodes.forEach((node, index) => {
       const col = index % columns;
       const row = Math.floor(index / columns);
-      const x = 60 + col * ((width - 120) / Math.max(1, columns - 1));
-      const rowCount = Math.ceil(state.topologyNodes.length / columns);
-      const y = 48 + row * ((height - 96) / Math.max(1, rowCount - 1));
+      const position = state.topologyPositions.get(node.id);
+      const x = position
+        ? position.x * width
+        : columns === 1 ? width / 2 : 60 + col * ((width - 120) / (columns - 1));
+      const y = position
+        ? position.y * height
+        : rowCount === 1 ? height / 2 : 40 + row * ((height - 80) / (rowCount - 1));
       const online = String(node.status || '').toLowerCase() === 'online';
       const color = online ? '#10b981' : '#f59e0b';
       context.beginPath();
@@ -209,7 +229,87 @@
       context.font = '10px "DM Mono", monospace';
       context.fillText(node.ip || '', x, y + 45, Math.min(130, width / columns));
     });
+    context.restore();
   }
+
+  function topologyWorldPoint(event) {
+    const rect = elements.canvas.getBoundingClientRect();
+    return {
+      x: (event.clientX - rect.left - state.topologyTransform.panX) / state.topologyTransform.zoom,
+      y: (event.clientY - rect.top - state.topologyTransform.panY) / state.topologyTransform.zoom,
+    };
+  }
+
+  elements.canvas.addEventListener('pointerdown', event => {
+    const point = topologyWorldPoint(event);
+    const rect = elements.canvas.getBoundingClientRect();
+    const columns = Math.max(1, Math.floor(rect.width / 150));
+    const rowCount = Math.ceil(state.topologyNodes.length / columns);
+    let selected = null;
+    for (let index = state.topologyNodes.length - 1; index >= 0; index -= 1) {
+      const node = state.topologyNodes[index];
+      const col = index % columns;
+      const row = Math.floor(index / columns);
+      const position = state.topologyPositions.get(node.id);
+      const x = position
+        ? position.x * rect.width
+        : columns === 1 ? rect.width / 2 : 60 + col * ((rect.width - 120) / (columns - 1));
+      const y = position
+        ? position.y * rect.height
+        : rowCount === 1 ? rect.height / 2 : 40 + row * ((rect.height - 80) / (rowCount - 1));
+      if (Math.hypot(point.x - x, point.y - y) <= 18) {
+        selected = node.id;
+        break;
+      }
+    }
+    state.topologyDrag = {
+      mode: selected ? 'node' : 'pan',
+      nodeId: selected,
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+    };
+    elements.canvas.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+
+  elements.canvas.addEventListener('pointermove', event => {
+    if (!state.topologyDrag) return;
+    if (state.topologyDrag.mode === 'node') {
+      const point = topologyWorldPoint(event);
+      const rect = elements.canvas.getBoundingClientRect();
+      state.topologyPositions.set(state.topologyDrag.nodeId, {
+        x: Math.max(0, Math.min(1, point.x / rect.width)),
+        y: Math.max(0, Math.min(1, point.y / rect.height)),
+      });
+    } else {
+      state.topologyTransform.panX += event.clientX - state.topologyDrag.pointerX;
+      state.topologyTransform.panY += event.clientY - state.topologyDrag.pointerY;
+      state.topologyDrag.pointerX = event.clientX;
+      state.topologyDrag.pointerY = event.clientY;
+    }
+    drawTopology();
+  });
+
+  function endTopologyDrag() {
+    state.topologyDrag = null;
+  }
+
+  elements.canvas.addEventListener('pointerup', endTopologyDrag);
+  elements.canvas.addEventListener('pointercancel', endTopologyDrag);
+  elements.canvas.addEventListener('wheel', event => {
+    event.preventDefault();
+    const rect = elements.canvas.getBoundingClientRect();
+    const pointerX = event.clientX - rect.left;
+    const pointerY = event.clientY - rect.top;
+    const oldZoom = state.topologyTransform.zoom;
+    const newZoom = Math.max(0.5, Math.min(3, oldZoom * (event.deltaY < 0 ? 1.1 : 0.9)));
+    const worldX = (pointerX - state.topologyTransform.panX) / oldZoom;
+    const worldY = (pointerY - state.topologyTransform.panY) / oldZoom;
+    state.topologyTransform.zoom = newZoom;
+    state.topologyTransform.panX = pointerX - worldX * newZoom;
+    state.topologyTransform.panY = pointerY - worldY * newZoom;
+    drawTopology();
+  }, { passive: false });
 
   async function refreshDashboard() {
     clearError();
@@ -267,7 +367,20 @@
   document.getElementById('refresh-button').addEventListener('click', refreshDashboard);
   window.addEventListener('resize', drawTopology);
 
-  refreshSubnet().catch(reportError);
-  refreshDashboard();
-  window.setInterval(refreshDashboard, refreshIntervalMs);
+  window.addEventListener('watchtower-auth-state', event => {
+    if (event.detail.authenticated) {
+      refreshSubnet().catch(reportError);
+      refreshDashboard();
+    } else if (event.detail.serviceAvailable) {
+      elements.connection.dataset.state = 'checking';
+      elements.connectionLabel.textContent = event.detail.configured
+        ? 'Admin login required'
+        : 'Admin setup required';
+    } else {
+      setConnection(false);
+    }
+  });
+  window.setInterval(() => {
+    if (window.watchtowerAuth?.authenticated) refreshDashboard();
+  }, refreshIntervalMs);
 })();

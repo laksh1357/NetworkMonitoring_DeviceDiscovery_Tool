@@ -16,6 +16,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body {
   margin: 0;
   min-width: 320px;
@@ -75,6 +76,25 @@ a { color: inherit; }
 .connection-pill[data-state="online"] { color: #6ee7b7; border-color: rgba(16, 185, 129, .4); }
 .connection-pill[data-state="offline"] { color: #fda4af; border-color: rgba(244, 63, 94, .4); }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.auth-gate {
+  width: min(1440px, calc(100% - 40px));
+  min-height: 72px;
+  margin: 18px auto 0;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(17, 28, 49, .9);
+}
+.auth-message { color: var(--muted); font-size: 12px; }
+.auth-form { display: flex; align-items: center; gap: 10px; }
+.auth-form label { color: var(--muted); font-size: 12px; }
+.auth-form input { width: min(300px, 40vw); }
+.auth-message[data-state="error"] { color: #fda4af; }
+.auth-message[data-state="success"] { color: #6ee7b7; }
 
 .page-shell { width: min(1440px, calc(100% - 40px)); margin: 28px auto 40px; }
 .notice {
@@ -179,7 +199,8 @@ tbody tr:hover { background: rgba(6, 182, 212, .035); }
 .empty-state { padding: 20px 8px; color: var(--muted); font-size: 11px; text-align: center; }
 
 .topology-wrap { position: relative; min-height: 240px; border: 1px solid rgba(148, 163, 184, .12); border-radius: 12px; background-color: rgba(11, 20, 38, .65); background-image: radial-gradient(rgba(148, 163, 184, .14) 1px, transparent 1px); background-size: 22px 22px; }
-#topology-canvas { display: block; width: 100%; height: 240px; }
+#topology-canvas { display: block; width: 100%; height: 240px; touch-action: none; cursor: grab; }
+#topology-canvas:active { cursor: grabbing; }
 #topology-empty { position: absolute; inset: 0; display: grid; place-items: center; padding: 20px; }
 #topology-empty[hidden] { display: none; }
 .page-footer { display: flex; justify-content: space-between; gap: 14px; margin-top: 17px; color: #64748b; font-size: 10px; }
@@ -195,6 +216,9 @@ tbody tr:hover { background: rgba(6, 182, 212, .035); }
 @media (max-width: 620px) {
   .topbar { align-items: flex-start; flex-direction: column; }
   .topbar-actions { width: 100%; justify-content: space-between; }
+  .auth-gate { width: calc(100% - 24px); align-items: stretch; flex-direction: column; }
+  .auth-form { align-items: stretch; flex-direction: column; }
+  .auth-form input { width: 100%; }
   .page-shell { width: min(100% - 24px, 1440px); margin-top: 16px; }
   .page-heading { align-items: flex-start; flex-direction: column; margin-top: 22px; }
   .heading-actions { width: 100%; }

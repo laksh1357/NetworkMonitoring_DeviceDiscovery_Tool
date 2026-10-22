@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from src.api.validation import parse_private_scan_subnet
+from src.api.validation import parse_private_ipv4_address, parse_private_scan_subnet
 
 
 class PrivateSubnetValidationTests(unittest.TestCase):
@@ -30,6 +30,12 @@ class PrivateSubnetValidationTests(unittest.TestCase):
     def test_rejects_reserved_but_non_rfc1918_range(self):
         with self.assertRaisesRegex(ValueError, "private"):
             parse_private_scan_subnet("192.0.0.0/24")
+
+    def test_accepts_and_rejects_only_rfc1918_target_addresses(self):
+        self.assertEqual(str(parse_private_ipv4_address("192.168.1.8")), "192.168.1.8")
+        for target in ("8.8.8.8", "192.0.0.8", "fd00::1", "127.0.0.1"):
+            with self.subTest(target=target), self.assertRaises(ValueError):
+                parse_private_ipv4_address(target)
 
 
 if __name__ == "__main__":

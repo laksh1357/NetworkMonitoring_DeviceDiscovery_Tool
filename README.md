@@ -4,7 +4,7 @@ A desktop network monitoring and device discovery tool built with Python and Cus
 
 ## Project Website
 
-Visit the [LAN Watchtower project website](https://network-monitoring-device-discovery-six.vercel.app/) for an overview of the network detection workflow and capabilities.
+The public [project website](https://network-monitoring-device-discovery-six.vercel.app/) is static-only. Run the backend on a machine connected to the network you are authorized to monitor for live data and controls.
 
 ## Project structure
 
@@ -18,8 +18,8 @@ Visit the [LAN Watchtower project website](https://network-monitoring-device-dis
 │   └── fixtures/
 ├── main.py             # compatibility desktop launcher
 ├── database_manager.py # compatibility persistence entry point
-├── web/                # canonical static frontend
-│   ├── security-simulator.html # illustrative security UI demo; generated sample values only
+├── web/                # backend-connected dashboard and security center
+│   ├── security-center.html # live host telemetry and audit integrity UI
 │   ├── assets/
 │   ├── components/
 │   └── pages/
@@ -27,12 +27,6 @@ Visit the [LAN Watchtower project website](https://network-monitoring-device-dis
 ├── pyproject.toml
 └── requirements.txt
 ```
-
-The [Security Concept Demo](./web/security-simulator.html) is a standalone
-visual prototype linked from the main dashboard. Its telemetry, challenge,
-topology, and event log are illustrative only; it does not perform device
-discovery, authentication, encryption, honeypot monitoring, or integrity
-verification.
 
 The canonical package is organized by application responsibility:
 
@@ -50,6 +44,7 @@ src/
 ├── behavior/        # Anomaly and behavior analysis
 ├── scanning/        # Host and service scanning
 ├── alerting/        # Alert lifecycle and notifications
+├── security/        # Admin challenge authentication and host telemetry
 ├── topology/        # Dashboard, topology, and historical analytics
 └── websocket/       # Live event transport
 ```
@@ -61,25 +56,29 @@ the optional desktop UI operate on the configured database.
 
 ## Deployment
 
-LAN Watchtower remains a desktop-first monitoring application. The deployment
-profile adds a small single-process backend for liveness/readiness checks and
-serves the canonical static web frontend. SQLite is persisted
-in a named Docker volume; a separate database container is not appropriate
-for the current SQLite storage engine.
+LAN Watchtower runs its live dashboard and API on the monitoring host. SQLite
+stores discovered network data and audit events. A separate database
+container is not appropriate for the current SQLite storage engine.
 
 ### Local development
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python3 -m unittest discover -s tests -v
-python3 main.py
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+$securePassword = Read-Host "Set a unique admin password (16+ characters)" -AsSecureString
+$env:LAN_WATCHTOWER_ADMIN_PASSWORD = [System.Net.NetworkCredential]::new("", $securePassword).Password
+python -m src.api.server
 ```
 
-The desktop application writes `network_logs.db` in the project directory by
-default. It requires a graphical session and should run on the host when LAN
-discovery needs the host network interface.
+Open `http://127.0.0.1:8000` in the same machine's browser and authenticate
+with that password. The API binds to loopback by default. Do not expose it to
+the LAN or internet without a deliberate TLS, access-control, and deployment
+review. The password is required; without it, the API remains locked.
+
+For the optional desktop application, run `python main.py`; it requires a
+graphical session and should run on the host when LAN discovery needs the host
+network interface.
 
 For package-based installation, use:
 
@@ -88,22 +87,23 @@ pip install -e ".[desktop]"
 lan-watchtower
 ```
 
-The `lan-watchtower` command starts the canonical backend health/readiness API.
-Use `python3 main.py` for the desktop monitoring application.
+The `lan-watchtower` command starts the backend API. Use `python main.py` for
+the desktop monitoring application.
 
 ### Docker development
 
 Copy the example environment file and start the deployment profile:
 
 ```bash
-cp .env.example .env
+Copy-Item .env.example .env
+# Set LAN_WATCHTOWER_ADMIN_PASSWORD in .env to a unique 16+ character secret.
 docker compose up --build
 ```
 
 The frontend is available at `http://localhost:8080` and binds to loopback by
-default because the API has no authentication. Keep that bind address unless
-you place the service behind an authenticated access layer. The backend
-is kept on the Docker network and is proxied by the frontend for API requests.
+default. The API requires an authenticated admin session; keep the loopback
+bind address unless you add a reviewed access layer. The backend is kept on
+the Docker network and is proxied by the frontend for API requests.
 Health checks are available at `http://localhost:8080/health` and
 `http://localhost:8080/ready`; the backend port is not published to the host.
 
@@ -116,14 +116,33 @@ repository root, and deploy. Automatic deployments happen only after the
 Vercel project is connected to the GitHub repository; pushing code alone does
 not connect an existing manually created Vercel deployment.
 
-Vercel's free Hobby plan may be suitable for a personal static demo, subject to
-Vercel's current limits and terms. This publishes only static files: the
-dashboard cannot reach a backend on your local network from Vercel, so live
-metrics, device inventory, alerts, and scan controls require the Docker
-deployment (or a separately hosted, securely configured backend). The
-monitoring process must run on an authorized host with access to the network
-being monitored. Do not expose the backend publicly without TLS and
-authentication.
+Vercel publishes only static files; it cannot reach a backend on your local
+network. The live dashboard, authentication, disk telemetry, and discovery
+controls therefore require the local Windows backend or Docker deployment.
+Do not expose the API publicly.
+
+### Live security features and limits
+
+- Admin login uses a 15-second, single-use HMAC challenge, a PBKDF2-derived
+  key, an HttpOnly SameSite session cookie, CSRF protection, and rate limiting.
+  Sessions are held in memory and expire after 30 minutes or a server restart.
+- Storage zones report measured sizes of the system volume, SQLite database,
+  application log directory, and quarantine evidence directory. Volume space
+  and host-wide disk I/O are real OS counters; the four app paths may share a
+  filesystem and are not separate partitions.
+- SHA-256 event leaves and Merkle checkpoints are verified from SQLite. This
+  detects mismatched stored events, but the root is in the same database and
+  is not externally anchored, so it is not protection against an attacker who
+  can rewrite the whole database.
+- The TCP honeypot is disabled by default. If explicitly enabled, it binds
+  only to a configured loopback or private IPv4 address, uses unprivileged
+  ports, records connection metadata only, and never reads payloads or runs
+  commands.
+- Network-wide quarantine is not available until a supported router, switch,
+  or firewall controller is configured. The UI reports this limit and never
+  claims that a device has been isolated; automatic blocking is not performed.
+- Discovery is restricted to RFC1918 IPv4 networks and at most 1,024
+  addresses per requested scan.
 
 ### Production deployment
 
@@ -163,6 +182,10 @@ See [.env.example](./.env.example). Supported deployment variables include:
 - `API_HOST`, `API_PORT`
 - `FRONTEND_BIND`, `FRONTEND_PORT` (leave the bind address at `127.0.0.1`
   unless an authenticated access layer protects the service)
+- `LAN_WATCHTOWER_ADMIN_PASSWORD`
+- `LAN_WATCHTOWER_HONEYPOT_ENABLED`, `LAN_WATCHTOWER_HONEYPOT_BIND`,
+  `LAN_WATCHTOWER_HONEYPOT_PORTS`
+- `LAN_WATCHTOWER_LOG_DIR`, `LAN_WATCHTOWER_QUARANTINE_DIR`
 - `DATABASE_PATH`
 - `WEB_CONCURRENCY` (keep at `1` for this deployment)
 - `WEBSOCKET_ENABLED`
@@ -184,26 +207,26 @@ desktop process before copying it.
 
 ### Network permissions
 
-The health API and static frontend do not perform LAN discovery. The desktop
-monitor needs access to the host interface; ARP discovery may require
-administrator/root privileges and Scapy raw-packet permissions. In Docker on
-Linux, a deliberately configured monitoring container may require host
-networking and `NET_RAW`/`NET_ADMIN` capabilities. Do not grant those
-capabilities to the health/frontend containers by default, and only monitor
-networks you own or are authorized to inspect.
+The local API performs discovery on the host that runs it. ARP discovery may
+require administrator privileges and Scapy raw-packet permissions. Docker
+Desktop uses a VM/network boundary and may not see the Windows host's ARP
+cache; use the native Windows runtime when Layer-2 discovery is required.
+Only scan networks you own or are explicitly authorized to inspect.
 
 ### Troubleshooting
 
 - `GET /health` is a process liveness check and does not verify the database.
 - `GET /ready` returns `503` when the SQLite database cannot be opened.
+- If the dashboard reports that authentication is locked, set a unique
+  16-character-or-longer `LAN_WATCHTOWER_ADMIN_PASSWORD` and restart the API.
 - If the frontend cannot load, check `docker compose ps` and the backend
   healthcheck before changing ports.
-- If discovery finds no devices, run the desktop process outside Docker first,
-  confirm the interface and permissions, and review the unprivileged fallback.
+- If discovery finds no devices, confirm the detected subnet and Windows
+  interface; run with appropriate privileges for ARP discovery.
 - If a database volume is locked, stop duplicate writers and restore from a
   consistent backup; do not delete the database to hide the error.
 
-## Dashboard
+## Desktop dashboard
 
 The desktop dashboard provides a dark network-operations layout with sidebar
 navigation, device summary cards, searchable/filterable/sortable device
