@@ -30,6 +30,7 @@ class Device:
     latency_ms: float | None = None
     last_seen: str = "Never"
     source: str = "unknown"
+    device_type: str = "Unknown"
     interface: str = "auto"
     fingerprint: str | None = None
     open_ports: tuple[int, ...] = ()

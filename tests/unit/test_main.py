@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from main import Device, detect_local_subnet, has_admin_privileges, normalize_mac
+from src.discovery.scanner import NetworkScanner
 from vendor_lookup import lookup_vendor, normalize_mac_prefix
 from database_manager import NetworkDatabase
 from port_scanner import OpenPort, scan_ports
@@ -113,6 +114,29 @@ class NetworkUtilityTests(unittest.TestCase):
     def test_device_row_formats_latency_and_unknown_values(self):
         row = Device(ip="192.168.1.4", status="Online", latency_ms=3.14159, last_seen="now").as_row()
         self.assertEqual(row, ("192.168.1.4", "Unknown", "Unknown", "Unknown", "Online", "3.1 ms", "now"))
+
+    @patch("src.discovery.scanner.lookup_vendor", return_value="Unknown")
+    @patch("src.discovery.scanner.resolve_hostname", return_value="host")
+    @patch("src.discovery.scanner.ping_host", return_value=(True, 1.0))
+    def test_layered_scan_preserves_inferred_device_type(
+        self,
+        _ping_host,
+        _resolve_hostname,
+        _lookup_vendor,
+    ):
+        scanner = NetworkScanner(max_workers=1, host_timeout=0.01)
+        reported = []
+        devices = scanner._layered_scan(
+            ipaddress.ip_network("192.168.1.0/30"),
+            {},
+            lambda _done, _total: None,
+            reported.append,
+        )
+        self.assertEqual([device.device_type for device in devices], ["Router", "PC/Workstation"])
+        self.assertEqual(
+            sorted(device.ip for device in reported),
+            sorted(device.ip for device in devices),
+        )
 
     def test_mac_normalization(self):
         self.assertEqual(normalize_mac("aa:bb:cc:dd:ee:ff"), "AA:BB:CC:DD:EE:FF")
