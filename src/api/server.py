@@ -16,6 +16,7 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from src.api.validation import parse_private_scan_subnet
 from src.core.database import NetworkDatabase
 from src.core.models import Device, ScanJobState
 from src.discovery.scanner import NetworkScanner, detect_local_subnet
@@ -26,7 +27,7 @@ _BASE_DIR = Path(__file__).resolve().parent.parent.parent
 _WEB_DIR = _BASE_DIR / "web"
 
 scanner = NetworkScanner()
-database = NetworkDatabase(_BASE_DIR / "network_logs.db")
+database = NetworkDatabase(os.environ.get("DATABASE_PATH", _BASE_DIR / "network_logs.db"))
 identity_service = IdentityVerificationService(database)
 
 scan_state = {
@@ -55,7 +56,6 @@ class NOCRequestHandler(SimpleHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(body)
 
@@ -323,12 +323,11 @@ class NOCRequestHandler(SimpleHTTPRequestHandler):
                 return
 
             try:
-                import ipaddress
                 raw_sub = body.get("subnet")
                 if not raw_sub:
                     raw_sub = str(detect_local_subnet())
-                sub = ipaddress.ip_network(raw_sub, strict=False)
-            except Exception as exc:
+                sub = parse_private_scan_subnet(raw_sub)
+            except (ValueError, OSError) as exc:
                 self._send_error_json(f"Invalid subnet range: {exc}")
                 return
 
@@ -554,16 +553,12 @@ class NOCRequestHandler(SimpleHTTPRequestHandler):
 
 
 def run_server(port: int = 8000, open_browser: bool = True) -> HTTPServer:
-    try:
-        httpd = HTTPServer(("0.0.0.0", port), NOCRequestHandler)
-    except OSError:
-        httpd = HTTPServer(("127.0.0.1", port), NOCRequestHandler)
-    print(f"===========================================================")
-    print(f"🚀 LAN Watchtower NOC Server running at http://localhost:{port}")
-    print(f"===========================================================")
+    host = os.environ.get("API_HOST", "127.0.0.1")
+    httpd = HTTPServer((host, port), NOCRequestHandler)
+    print(f"LAN Watchtower dashboard and API running at http://{host}:{port}")
 
     if open_browser:
-        threading.Thread(target=lambda: (time.sleep(1.0), webbrowser.open(f"http://localhost:{port}")), daemon=True).start()
+        threading.Thread(target=lambda: (time.sleep(1.0), webbrowser.open(f"http://127.0.0.1:{port}")), daemon=True).start()
 
     return httpd
 

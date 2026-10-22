@@ -100,25 +100,30 @@ cp .env.example .env
 docker compose up --build
 ```
 
-The static frontend is available at `http://localhost:8080`. The backend
-health API is available at `http://localhost:8000/health` and
-`http://localhost:8000/ready`.
+The frontend is available at `http://localhost:8080` and binds to loopback by
+default because the API has no authentication. Keep that bind address unless
+you place the service behind an authenticated access layer. The backend
+is kept on the Docker network and is proxied by the frontend for API requests.
+Health checks are available at `http://localhost:8080/health` and
+`http://localhost:8080/ready`; the backend port is not published to the host.
 
 ### Public static dashboard (Vercel)
 
 The repository includes a [Vercel configuration](./vercel.json) that publishes
 the static site from `web/`. To deploy it, import this GitHub repository at
 [vercel.com/new](https://vercel.com/new), keep the project root set to the
-repository root, and deploy. Vercel can then build and publish future pushes
-to `main` automatically. The public URL is assigned by Vercel when the project
-is created.
+repository root, and deploy. Automatic deployments happen only after the
+Vercel project is connected to the GitHub repository; pushing code alone does
+not connect an existing manually created Vercel deployment.
 
-Vercel's free Hobby plan is suitable for a personal static demo, subject to
-Vercel's current limits and terms; free hosting is not guaranteed to remain
-free forever. This publishes only the dashboard, not the backend or live LAN
-discovery. The monitoring process must run on an authorized host with access
-to the network being monitored. Do not expose the backend publicly without
-TLS and authentication.
+Vercel's free Hobby plan may be suitable for a personal static demo, subject to
+Vercel's current limits and terms. This publishes only static files: the
+dashboard cannot reach a backend on your local network from Vercel, so live
+metrics, device inventory, alerts, and scan controls require the Docker
+deployment (or a separately hosted, securely configured backend). The
+monitoring process must run on an authorized host with access to the network
+being monitored. Do not expose the backend publicly without TLS and
+authentication.
 
 ### Production deployment
 
@@ -156,7 +161,8 @@ unless relationship evidence is collected.
 See [.env.example](./.env.example). Supported deployment variables include:
 
 - `API_HOST`, `API_PORT`
-- `FRONTEND_PORT`
+- `FRONTEND_BIND`, `FRONTEND_PORT` (leave the bind address at `127.0.0.1`
+  unless an authenticated access layer protects the service)
 - `DATABASE_PATH`
 - `WEB_CONCURRENCY` (keep at `1` for this deployment)
 - `WEBSOCKET_ENABLED`

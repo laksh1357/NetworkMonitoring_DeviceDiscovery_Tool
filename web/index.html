@@ -1,1267 +1,168 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CyberGuard - Network Monitoring & Live Section Storage SOC</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Fonts Inter & JetBrains Mono -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        soc: {
-                            bg: '#090d16',
-                            card: '#111827',
-                            cardBorder: '#1f2937',
-                            accent: '#06b6d4', // Cyan
-                            neonGreen: '#10b981',
-                            alertRed: '#ef4444',
-                            warningAmber: '#f59e0b',
-                            purple: '#8b5cf6'
-                        }
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        mono: ['JetBrains Mono', 'monospace']
-                    }
-                }
-            }
-        }
-    </script>
-    <style>
-        body {
-            background-color: #080c14;
-            color: #e2e8f0;
-            font-family: 'Inter', sans-serif;
-            overflow-x: hidden;
-        }
-
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #0f172a;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #334155;
-            border-radius: 3px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #06b6d4;
-        }
-
-        /* Cyber Glow Effects */
-        .glow-cyan {
-            box-shadow: 0 0 15px rgba(6, 182, 212, 0.25);
-        }
-        .glow-green {
-            box-shadow: 0 0 15px rgba(16, 185, 129, 0.25);
-        }
-        .glow-red {
-            box-shadow: 0 0 15px rgba(239, 68, 68, 0.3);
-        }
-        .glow-amber {
-            box-shadow: 0 0 15px rgba(245, 158, 11, 0.25);
-        }
-
-        /* Pulse Animation */
-        @keyframes cyberPulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.6; transform: scale(1.03); }
-        }
-        .animate-cyber-pulse {
-            animation: cyberPulse 3s infinite ease-in-out;
-        }
-
-        /* Terminal line styling */
-        .term-line {
-            line-height: 1.4;
-            border-left: 2px solid transparent;
-            padding-left: 6px;
-        }
-        .term-line:hover {
-            background: rgba(255, 255, 255, 0.03);
-            border-left-color: #06b6d4;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="description" content="LAN Watchtower discovers and monitors devices on networks you are authorized to inspect.">
+  <title>LAN Watchtower | Network Monitoring</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/styles.css">
 </head>
-<body class="min-h-screen flex flex-col">
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="LAN Watchtower home">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 40 40" fill="none">
+          <path d="M20 3.5 33 8v10.5c0 8.7-5.5 14.3-13 18-7.5-3.7-13-9.3-13-18V8l13-4.5Z" stroke="currentColor" stroke-width="2"/>
+          <circle cx="20" cy="19" r="7" stroke="currentColor" stroke-width="1.6"/>
+          <path d="M20 19 28 12M20 10v2m0 14v2m9-9h-2m-14 0h-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          <circle cx="20" cy="19" r="2" fill="currentColor"/>
+        </svg>
+      </span>
+      <span class="brand-copy">
+        <strong>LAN <span>WATCHTOWER</span></strong>
+        <small>Network discovery &amp; monitoring</small>
+      </span>
+    </a>
 
-    <!-- TOP NAVIGATION BAR -->
-    <header class="bg-slate-900/90 border-b border-slate-800 sticky top-0 z-40 backdrop-blur-md px-4 py-3">
-        <div class="max-w-[1920px] mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+    <div class="topbar-actions">
+      <a class="text-link" href="security-simulator.html">Security concept demo</a>
+      <span id="connection-status" class="connection-pill" data-state="checking">
+        <span class="status-dot"></span>
+        <span id="connection-label">Checking backend…</span>
+      </span>
+    </div>
+  </header>
 
-            <!-- Brand & Status -->
-            <div class="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
-                <div class="flex items-center gap-3">
-                    <div class="p-2.5 bg-cyan-950/80 border border-cyan-500/50 rounded-xl text-cyan-400 glow-cyan">
-                        <i class="fa-solid fa-shield-halved text-xl"></i>
-                    </div>
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <h1 class="font-bold text-lg tracking-wider text-white">CYBER<span class="text-cyan-400">GUARD</span></h1>
-                            <span class="px-2 py-0.5 text-[10px] font-mono bg-cyan-950 border border-cyan-800 text-cyan-300 rounded-full">v3.4-AES256</span>
-                        </div>
-                        <p class="text-xs text-slate-400">Network Discovery & Live Section Storage Telemetry</p>
-                    </div>
-                </div>
+  <main class="page-shell">
+    <section class="notice" role="note">
+      <strong>Authorized networks only.</strong>
+      Discovery scans are limited to private IPv4 ranges. This dashboard shows data returned by the LAN Watchtower backend;
+      it does not claim cryptographic log verification, storage I/O telemetry, honeypot detection, or automatic firewall blocking.
+    </section>
 
-                <!-- Mobile Live Indicator -->
-                <div class="flex md:hidden items-center gap-2 px-2.5 py-1 bg-emerald-950/60 border border-emerald-800/80 rounded-full text-emerald-400 text-xs">
-                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                    <span>LIVE WSS</span>
-                </div>
-            </div>
+    <section class="page-heading">
+      <div>
+        <p class="eyebrow">NETWORK OPERATIONS</p>
+        <h1>Monitoring overview</h1>
+        <p class="muted">A live view of discovered devices, scan activity, and recorded alerts.</p>
+      </div>
+      <div class="heading-actions">
+        <a class="button button-secondary" href="/api/export/csv">Export CSV</a>
+        <button class="button button-primary" id="refresh-button" type="button">Refresh data</button>
+      </div>
+    </section>
 
-            <!-- Global Quick Metrics Header Row -->
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full md:w-auto">
-                <div class="bg-slate-950/60 border border-slate-800/80 rounded-lg px-3 py-1.5 flex items-center gap-3">
-                    <i class="fa-solid fa-network-wired text-cyan-400 text-base"></i>
-                    <div>
-                        <div class="text-[11px] text-slate-400 font-medium">Active Devices</div>
-                        <div class="text-sm font-bold font-mono text-white" id="stat-active-devices">24 / 28</div>
-                    </div>
-                </div>
+    <p id="error-banner" class="error-banner" role="alert" hidden></p>
 
-                <div class="bg-slate-950/60 border border-slate-800/80 rounded-lg px-3 py-1.5 flex items-center gap-3">
-                    <i class="fa-solid fa-arrows-up-down text-emerald-400 text-base"></i>
-                    <div>
-                        <div class="text-[11px] text-slate-400 font-medium">Net Throughput</div>
-                        <div class="text-sm font-bold font-mono text-white" id="stat-throughput">142.8 Mbps</div>
-                    </div>
-                </div>
+    <section class="metrics-grid" aria-label="Network metrics">
+      <article class="metric-card metric-cyan">
+        <span class="metric-label">Online devices</span>
+        <strong id="metric-online" class="metric-value">—</strong>
+        <span class="metric-foot">Current inventory status</span>
+      </article>
+      <article class="metric-card metric-emerald">
+        <span class="metric-label">Total devices</span>
+        <strong id="metric-total" class="metric-value">—</strong>
+        <span id="metric-offline" class="metric-foot">Offline: —</span>
+      </article>
+      <article class="metric-card metric-amber">
+        <span class="metric-label">Active alerts</span>
+        <strong id="metric-alerts" class="metric-value">—</strong>
+        <span id="metric-critical" class="metric-foot">Critical: —</span>
+      </article>
+      <article class="metric-card metric-purple">
+        <span class="metric-label">Network health</span>
+        <strong id="metric-health" class="metric-value">—</strong>
+        <span id="metric-scans" class="metric-foot">Completed scans: —</span>
+      </article>
+    </section>
 
-                <div class="bg-slate-950/60 border border-slate-800/80 rounded-lg px-3 py-1.5 flex items-center gap-3">
-                    <i class="fa-solid fa-hard-drive text-purple-400 text-base"></i>
-                    <div>
-                        <div class="text-[11px] text-slate-400 font-medium">Total Used Storage</div>
-                        <div class="text-sm font-bold font-mono text-white" id="stat-total-storage">1.82 TB / 3.50 TB</div>
-                    </div>
-                </div>
-
-                <div class="bg-slate-950/60 border border-slate-800/80 rounded-lg px-3 py-1.5 flex items-center gap-3">
-                    <i class="fa-solid fa-triangle-exclamation text-amber-400 text-base"></i>
-                    <div>
-                        <div class="text-[11px] text-slate-400 font-medium">Threat Shields</div>
-                        <div class="text-sm font-bold font-mono text-emerald-400" id="stat-shield-status">ACTIVE (0 ARP)</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Action Buttons -->
-            <div class="flex items-center gap-2 w-full md:w-auto justify-end">
-                <a href="security-simulator.html" class="px-3.5 py-1.5 text-xs font-medium bg-amber-950/60 hover:bg-amber-900/70 text-amber-300 border border-amber-800/60 rounded-lg transition-all flex items-center gap-2">
-                    <i class="fa-solid fa-flask"></i>
-                    <span>Security Concept Demo</span>
-                </a>
-                <button onclick="openCodeModal()" class="px-3.5 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-800/60 rounded-lg transition-all flex items-center gap-2">
-                    <i class="fa-solid fa-code"></i>
-                    <span>Python Code Architecture</span>
-                </button>
-                <div class="hidden md:flex items-center gap-2 px-3 py-1.5 bg-emerald-950/60 border border-emerald-800/80 rounded-lg text-emerald-400 text-xs font-mono">
-                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                    <span>WSS CONNECTED</span>
-                </div>
-            </div>
-
+    <section class="panel scan-panel" aria-labelledby="scan-title">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">DISCOVERY</p>
+          <h2 id="scan-title">Authorized subnet scan</h2>
         </div>
-    </header>
+        <span id="scan-state" class="state-badge">Idle</span>
+      </div>
+      <form id="scan-form" class="scan-controls">
+        <label class="field-label" for="subnet-input">Private IPv4 subnet</label>
+        <input id="subnet-input" name="subnet" type="text" inputmode="url" placeholder="Detecting local subnet…" required>
+        <button id="scan-start" class="button button-primary" type="submit">Start scan</button>
+        <button id="scan-stop" class="button button-danger" type="button" disabled>Stop scan</button>
+      </form>
+      <div class="progress-meta">
+        <span id="scan-summary">No scan in progress</span>
+        <span id="scan-percent">0%</span>
+      </div>
+      <div class="progress-track" role="progressbar" aria-label="Scan progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <span id="scan-progress"></span>
+      </div>
+      <p id="scan-detail" class="muted scan-detail">Use this scanner only on networks you own or are explicitly authorized to monitor.</p>
+    </section>
 
-    <!-- MAIN DASHBOARD CONTENT GRID -->
-    <main class="flex-1 max-w-[1920px] w-full mx-auto p-4 space-y-5">
-
-        <!-- SECTION 1: SECURITY SHIELD & LIVE STORAGE MONITORING OVERVIEW -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
-
-            <!-- Security Health Radial Gauge & Protocols (3 Cols) -->
-            <div class="lg:col-span-3 bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
-                <div>
-                    <div class="flex items-center justify-between mb-3">
-                        <h2 class="text-sm font-bold tracking-wide uppercase text-slate-300 flex items-center gap-2">
-                            <i class="fa-solid fa-shield-virus text-cyan-400"></i>
-                            Security Health Score
-                        </h2>
-                        <span class="px-2 py-0.5 text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800 rounded">OPTIMAL</span>
-                    </div>
-
-                    <!-- Gauge Canvas Container -->
-                    <div class="relative flex flex-col items-center justify-center my-2">
-                        <canvas id="healthGaugeCanvas" width="180" height="180"></canvas>
-                        <div class="absolute inset-0 flex flex-col items-center justify-center text-center pt-2">
-                            <span class="text-3xl font-extrabold font-mono text-white" id="gaugeScoreValue">96%</span>
-                            <span class="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Protected</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Protocol Badges -->
-                <div class="space-y-2 mt-2">
-                    <div class="flex items-center justify-between p-2 bg-slate-950/70 border border-slate-800/80 rounded-lg text-xs">
-                        <span class="text-slate-400 flex items-center gap-2"><i class="fa-solid fa-lock text-cyan-400"></i> Vault Encryption</span>
-                        <span class="font-mono text-emerald-400 font-semibold">AES-256-GCM</span>
-                    </div>
-                    <div class="flex items-center justify-between p-2 bg-slate-950/70 border border-slate-800/80 rounded-lg text-xs">
-                        <span class="text-slate-400 flex items-center gap-2"><i class="fa-solid fa-network-wired text-purple-400"></i> Polling Engine</span>
-                        <span class="font-mono text-emerald-400 font-semibold">SNMPv3 USM</span>
-                    </div>
-                    <div class="flex items-center justify-between p-2 bg-slate-950/70 border border-slate-800/80 rounded-lg text-xs">
-                        <span class="text-slate-400 flex items-center gap-2"><i class="fa-solid fa-[#000] fa-shield-cat text-amber-400"></i> ARP Spoof Shield</span>
-                        <span class="font-mono text-emerald-400 font-semibold">ACTIVE (Strict)</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- SECTION-WISE LIVE STORAGE CARDS (9 Cols - REQUESTED FEATURE) -->
-            <div class="lg:col-span-9 bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
-                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-3 border-b border-slate-800 gap-2">
-                    <div>
-                        <h2 class="text-sm font-bold tracking-wide uppercase text-slate-200 flex items-center gap-2">
-                            <i class="fa-solid fa-database text-purple-400"></i>
-                            Live Storage Section Breakdown & Telemetry
-                        </h2>
-                        <p class="text-xs text-slate-400">Real-time disk partition allocation, dynamic I/O speeds & automated threshold monitors</p>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <span class="text-xs text-slate-400 font-mono">Poll: <span class="text-cyan-400">1000ms</span></span>
-                        <button onclick="refreshStorageMetrics()" class="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition">
-                            <i class="fa-solid fa-arrows-rotate"></i> Sync
-                        </button>
-                    </div>
-                </div>
-
-                <!-- 4 Storage Section Cards Grid -->
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 my-3" id="storageCardsContainer">
-                    <!-- Dynamic Injected Storage Cards -->
-                </div>
-
-                <!-- Storage Bottom Summary Bar -->
-                <div class="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between text-xs text-slate-400 gap-2">
-                    <div class="flex items-center gap-4 font-mono text-[11px]">
-                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-cyan-500"></span> Used Space</span>
-                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-emerald-500"></span> Free Available</span>
-                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-purple-500"></span> System Reserved</span>
-                    </div>
-                    <div class="text-[11px] font-mono text-cyan-300">
-                        <i class="fa-solid fa-bolt text-amber-400"></i> Global I/O Rate: <span id="globalIORate">Read 48.2 MB/s | Write 18.5 MB/s</span>
-                    </div>
-                </div>
-            </div>
-
+    <div class="content-grid">
+      <section class="panel inventory-panel" aria-labelledby="inventory-title">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">OBSERVED HOSTS</p>
+            <h2 id="inventory-title">Device inventory</h2>
+          </div>
+          <label class="search-control">
+            <span class="visually-hidden">Filter devices</span>
+            <input id="device-search" type="search" placeholder="Filter IP, hostname, vendor…">
+          </label>
         </div>
-
-        <!-- SECTION 2: TOPOLOGY MAP & REAL-TIME SECURITY TERMINAL -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
-
-            <!-- Interactive 2D Network Topology Graph (7 Cols) -->
-            <div class="lg:col-span-7 bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col relative overflow-hidden min-h-[460px]">
-                <div class="flex items-center justify-between mb-3 z-10">
-                    <div>
-                        <h2 class="text-sm font-bold tracking-wide uppercase text-slate-200 flex items-center gap-2">
-                            <i class="fa-solid fa-diagram-project text-cyan-400"></i>
-                            Interactive Network Topology Map
-                        </h2>
-                        <p class="text-xs text-slate-400">Click nodes to inspect live IP, MAC, latency, open ports & vendor OUI</p>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <button onclick="resetGraphZoom()" class="px-2 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700">
-                            <i class="fa-solid fa-compress"></i> Reset View
-                        </button>
-                        <button onclick="triggerSimulatedScan()" class="px-2.5 py-1 text-xs bg-cyan-950 text-cyan-300 border border-cyan-800 hover:bg-cyan-900 rounded font-medium">
-                            <i class="fa-solid fa-radar"></i> Rescan Subnet
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Canvas Topology Graph -->
-                <div class="relative flex-1 bg-slate-950/80 border border-slate-800/80 rounded-xl overflow-hidden cursor-crosshair">
-                    <canvas id="topologyCanvas" class="w-full h-full block"></canvas>
-
-                    <!-- Node Inspector Floating Drawer -->
-                    <div id="nodeInspector" class="hidden absolute top-3 right-3 w-72 bg-slate-900/95 border border-cyan-500/50 rounded-xl p-3 backdrop-blur-md shadow-2xl z-20 text-xs">
-                        <div class="flex items-center justify-between border-b border-slate-800 pb-2 mb-2">
-                            <span class="font-bold font-mono text-cyan-400 flex items-center gap-1.5" id="insp-name">
-                                <i class="fa-solid fa-server"></i> Core-Router-01
-                            </span>
-                            <button onclick="closeInspector()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
-                        </div>
-                        <div class="space-y-1.5 font-mono text-[11px]">
-                            <div class="flex justify-between"><span class="text-slate-400">IP Address:</span><span class="text-white font-bold" id="insp-ip">192.168.1.1</span></div>
-                            <div class="flex justify-between"><span class="text-slate-400">MAC Address:</span><span class="text-slate-300" id="insp-mac">00:1A:2B:3C:4D:5E</span></div>
-                            <div class="flex justify-between"><span class="text-slate-400">Vendor (OUI):</span><span class="text-emerald-400" id="insp-vendor">Cisco Systems</span></div>
-                            <div class="flex justify-between"><span class="text-slate-400">Latency / Jitter:</span><span class="text-cyan-300" id="insp-ping">1.2 ms / 0.1ms</span></div>
-                            <div class="flex justify-between"><span class="text-slate-400">Security Mode:</span><span class="text-purple-400" id="insp-sec">SNMPv3 Encrypted</span></div>
-                            <div class="mt-2 pt-2 border-t border-slate-800">
-                                <span class="text-slate-400 block mb-1">Active Open Ports:</span>
-                                <div class="flex flex-wrap gap-1" id="insp-ports">
-                                    <span class="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-[10px] text-cyan-300">22/SSH</span>
-                                    <span class="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-[10px] text-cyan-300">443/HTTPS</span>
-                                    <span class="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-[10px] text-cyan-300">161/SNMP</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Real-Time Cyber Security Terminal & Packet Stream (5 Cols) -->
-            <div class="lg:col-span-5 bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between min-h-[460px]">
-                <div>
-                    <div class="flex items-center justify-between mb-2">
-                        <h2 class="text-sm font-bold tracking-wide uppercase text-slate-200 flex items-center gap-2">
-                            <i class="fa-solid fa-terminal text-emerald-400"></i>
-                            Threat Stream & Packet Log Terminal
-                        </h2>
-                        <div class="flex items-center gap-1 font-mono text-[10px]">
-                            <button onclick="setLogFilter('ALL')" class="px-2 py-0.5 rounded bg-slate-800 text-cyan-300 border border-slate-700 hover:bg-slate-700">ALL</button>
-                            <button onclick="setLogFilter('WARN')" class="px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-800 hover:bg-amber-900">WARN</button>
-                            <button onclick="setLogFilter('SEC')" class="px-2 py-0.5 rounded bg-red-950 text-red-300 border border-red-800 hover:bg-red-900">ALERT</button>
-                        </div>
-                    </div>
-                    <p class="text-xs text-slate-400 mb-2">Streaming real-time ARP checks, AES hash validations & SNMP packet logs</p>
-                </div>
-
-                <!-- Terminal Output Box -->
-                <div class="flex-1 bg-slate-950 border border-slate-800/90 rounded-xl p-3 font-mono text-[11px] overflow-y-auto max-h-[340px] space-y-1.5" id="terminalOutput">
-                    <!-- Injected Logs -->
-                </div>
-
-                <!-- Terminal Command Input Footer -->
-                <div class="mt-3 pt-2 border-t border-slate-800/80 flex items-center gap-2">
-                    <span class="text-emerald-400 font-mono text-xs font-bold">&gt;</span>
-                    <input type="text" id="termInput" placeholder="Type command (e.g. 'scan', 'clear', 'check-arp', 'vault-status')..." class="flex-1 bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-xs font-mono text-slate-200 focus:outline-none focus:border-cyan-500">
-                    <button onclick="execTermCmd()" class="px-3 py-1 bg-cyan-950 text-cyan-300 border border-cyan-800 rounded text-xs font-mono hover:bg-cyan-900">Exec</button>
-                </div>
-            </div>
-
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Status</th><th>IP address</th><th>Hostname</th><th>Vendor</th><th>Type</th><th>Last seen</th></tr>
+            </thead>
+            <tbody id="device-rows">
+              <tr><td class="empty-cell" colspan="6">Waiting for backend data…</td></tr>
+            </tbody>
+          </table>
         </div>
+        <p id="inventory-count" class="panel-footer">0 devices</p>
+      </section>
 
-        <!-- SECTION 3: REAL-TIME THROUGHPUT & LATENCY PERFORMANCE CHARTS -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-
-            <!-- Bandwidth Canvas Chart -->
-            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
-                <div class="flex items-center justify-between mb-2">
-                    <h2 class="text-sm font-bold tracking-wide uppercase text-slate-200 flex items-center gap-2">
-                        <i class="fa-solid fa-chart-line text-cyan-400"></i>
-                        Live Network Throughput (Upload / Download)
-                    </h2>
-                    <span class="text-xs font-mono text-cyan-400" id="liveBwVal">DL: 112 MB/s | UL: 30.8 MB/s</span>
-                </div>
-                <div class="h-44 w-full relative">
-                    <canvas id="bandwidthChartCanvas" class="w-full h-full block"></canvas>
-                </div>
-            </div>
-
-            <!-- Ping Latency Jitter Canvas Chart -->
-            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
-                <div class="flex items-center justify-between mb-2">
-                    <h2 class="text-sm font-bold tracking-wide uppercase text-slate-200 flex items-center gap-2">
-                        <i class="fa-solid fa-wave-square text-emerald-400"></i>
-                        Subnet Ping Latency & Jitter Jitter (ms)
-                    </h2>
-                    <span class="text-xs font-mono text-emerald-400" id="livePingVal">Avg: 2.4 ms | Jitter: 0.2 ms</span>
-                </div>
-                <div class="h-44 w-full relative">
-                    <canvas id="pingChartCanvas" class="w-full h-full block"></canvas>
-                </div>
-            </div>
-
+      <section class="panel alerts-panel" aria-labelledby="alerts-title">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">RECENT EVENTS</p>
+            <h2 id="alerts-title">Alert feed</h2>
+          </div>
         </div>
+        <ul id="alert-list" class="alert-list">
+          <li class="empty-state">Waiting for backend data…</li>
+        </ul>
+      </section>
+    </div>
 
-    </main>
-
-    <!-- FOOTER -->
-    <footer class="bg-slate-950 border-t border-slate-800 py-3 px-4 mt-auto">
-        <div class="max-w-[1920px] mx-auto flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2 font-mono">
-            <div>
-                CYBERGUARD MONITORING SYSTEM &bull; ENCRYPTED WITH AES-256-GCM &bull; SNMPv3 USM ACTIVE
-            </div>
-            <div>
-                SECTION-WISE STORAGE TELEMETRY: <span class="text-emerald-400">ONLINE</span>
-            </div>
+    <section class="panel topology-panel" aria-labelledby="topology-title">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">OBSERVED NODES</p>
+          <h2 id="topology-title">Network topology</h2>
         </div>
+        <span class="muted">Node placement is visual only; physical links are not inferred.</span>
+      </div>
+      <div class="topology-wrap">
+        <canvas id="topology-canvas" aria-label="Visual layout of discovered devices"></canvas>
+        <p id="topology-empty" class="empty-state">No discovered devices to display. Run an authorized scan to populate the view.</p>
+      </div>
+    </section>
+
+    <footer class="page-footer">
+      <span>LAN Watchtower · Local-first network monitoring</span>
+      <span id="last-updated">Data has not been refreshed yet.</span>
     </footer>
+  </main>
 
-    <!-- STORAGE DRILLDOWN MODAL -->
-    <div id="storageModal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-cyan-500/40 rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl relative">
-            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-                <div class="flex items-center gap-3">
-                    <div class="p-2 bg-purple-950 border border-purple-800 rounded-lg text-purple-400" id="modalIcon">
-                        <i class="fa-solid fa-hard-drive"></i>
-                    </div>
-                    <div>
-                        <h3 class="font-bold text-base text-white" id="modalSectionTitle">Partition Details</h3>
-                        <p class="text-xs text-slate-400 font-mono" id="modalMountPoint">Mount: /var/lib/data</p>
-                    </div>
-                </div>
-                <button onclick="closeStorageModal()" class="text-slate-400 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-
-            <div class="space-y-3 font-mono text-xs">
-                <div class="grid grid-cols-3 gap-3 text-center">
-                    <div class="bg-slate-950 p-2.5 rounded-lg border border-slate-800">
-                        <div class="text-slate-400 text-[10px]">TOTAL CAPACITY</div>
-                        <div class="text-sm font-bold text-white mt-1" id="modalTotalCap">1000 GB</div>
-                    </div>
-                    <div class="bg-slate-950 p-2.5 rounded-lg border border-slate-800">
-                        <div class="text-slate-400 text-[10px]">USED SPACE</div>
-                        <div class="text-sm font-bold text-cyan-400 mt-1" id="modalUsedCap">620 GB</div>
-                    </div>
-                    <div class="bg-slate-950 p-2.5 rounded-lg border border-slate-800">
-                        <div class="text-slate-400 text-[10px]">FREE AVAILABLE</div>
-                        <div class="text-sm font-bold text-emerald-400 mt-1" id="modalFreeCap">380 GB</div>
-                    </div>
-                </div>
-
-                <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-2">
-                    <div class="flex justify-between font-sans text-slate-300 font-medium">
-                        <span>Directory Usage Breakdown</span>
-                        <span id="modalPercText" class="text-cyan-400">62% Used</span>
-                    </div>
-                    <div class="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden flex">
-                        <div id="modalBarUsed" class="bg-cyan-500 h-full" style="width: 62%"></div>
-                        <div id="modalBarFree" class="bg-emerald-500 h-full" style="width: 30%"></div>
-                        <div id="modalBarSys" class="bg-purple-500 h-full" style="width: 8%"></div>
-                    </div>
-                </div>
-
-                <div class="space-y-1.5">
-                    <span class="text-slate-400 font-sans text-xs font-semibold">Sub-directory File Inspector:</span>
-                    <div class="bg-slate-950 rounded-lg border border-slate-800 p-2 space-y-1.5 max-h-40 overflow-y-auto" id="modalSubdirs">
-                        <!-- Dynamic directories -->
-                    </div>
-                </div>
-            </div>
-
-            <div class="flex justify-end pt-2 border-t border-slate-800">
-                <button onclick="closeStorageModal()" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium">Close Inspector</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- CODE ARCHITECTURE MODAL (PYTHON BACKEND IMPLEMENTATION) -->
-    <div id="codeModal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-4xl w-full h-[85vh] p-6 flex flex-col shadow-2xl relative">
-            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-                <div class="flex items-center gap-2">
-                    <i class="fa-brands fa-python text-amber-400 text-xl"></i>
-                    <div>
-                        <h3 class="font-bold text-base text-white">Production Backend Architecture & Security Code</h3>
-                        <p class="text-xs text-slate-400">Python modules for AES-256 GCM vault, psutil storage telemetry, ARP shield & WebSockets</p>
-                    </div>
-                </div>
-                <button onclick="closeCodeModal()" class="text-slate-400 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-
-            <!-- Modal Code Navigation Tabs -->
-            <div class="flex border-b border-slate-800 my-3 gap-2 font-mono text-xs overflow-x-auto">
-                <button onclick="switchCodeTab('vault')" id="tab-vault" class="px-3 py-2 border-b-2 border-cyan-400 text-cyan-300 font-bold">1. AES-256 Vault</button>
-                <button onclick="switchCodeTab('storage')" id="tab-storage" class="px-3 py-2 text-slate-400 border-b-2 border-transparent hover:text-slate-200">2. Section Storage (psutil)</button>
-                <button onclick="switchCodeTab('arp')" id="tab-arp" class="px-3 py-2 text-slate-400 border-b-2 border-transparent hover:text-slate-200">3. ARP Spoof Shield</button>
-                <button onclick="switchCodeTab('wss')" id="tab-wss" class="px-3 py-2 text-slate-400 border-b-2 border-transparent hover:text-slate-200">4. WebSocket Server</button>
-            </div>
-
-            <!-- Code Viewing Container -->
-            <div class="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-4 font-mono text-xs text-slate-300 overflow-y-auto relative">
-                <button onclick="copyCodeContent()" class="absolute top-3 right-3 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-300 rounded text-[11px] flex items-center gap-1.5">
-                    <i class="fa-solid fa-copy"></i> Copy Code
-                </button>
-                <pre id="codeSnippetBox" class="whitespace-pre-wrap leading-relaxed"></pre>
-            </div>
-
-            <div class="flex justify-between items-center pt-3 border-t border-slate-800 text-xs text-slate-400">
-                <span>Copy these standalone scripts into your Python project structure</span>
-                <button onclick="closeCodeModal()" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg">Close</button>
-            </div>
-        </div>
-    </div>
-
-
-    <!-- DASHBOARD JAVASCRIPT LOGIC -->
-    <script>
-        /* ==========================================================================
-           1. MOCK DATA & STATE MANAGEMENT
-           ========================================================================== */
-
-        // Storage Partition Data Structure (Section-wise)
-        let storageSections = [
-            {
-                id: 'root',
-                name: 'System Root Partition',
-                mount: '/',
-                icon: 'fa-linux',
-                totalGB: 500,
-                usedGB: 185,
-                freeGB: 285,
-                sysGB: 30,
-                readSpeed: 42.1,
-                writeSpeed: 12.4,
-                alertLevel: 'NORMAL',
-                subdirs: [
-                    { name: '/usr/bin', size: '42.5 GB' },
-                    { name: '/lib64', size: '38.1 GB' },
-                    { name: '/etc/config', size: '4.2 GB' }
-                ]
-            },
-            {
-                id: 'data',
-                name: 'App Data & DB Store',
-                mount: '/var/lib/data',
-                icon: 'fa-database',
-                totalGB: 1200,
-                usedGB: 890,
-                freeGB: 250,
-                sysGB: 60,
-                readSpeed: 88.4,
-                writeSpeed: 45.2,
-                alertLevel: 'NORMAL',
-                subdirs: [
-                    { name: '/postgres/data', size: '520 GB' },
-                    { name: '/redis/cache', size: '140 GB' },
-                    { name: '/elastic/index', size: '230 GB' }
-                ]
-            },
-            {
-                id: 'mnt',
-                name: 'Mounted SAN / Backup',
-                mount: '/mnt/network_backup',
-                icon: 'fa-network-wired',
-                totalGB: 2000,
-                usedGB: 1720,
-                freeGB: 180,
-                sysGB: 100,
-                readSpeed: 15.2,
-                writeSpeed: 82.0,
-                alertLevel: 'WARNING', // High usage
-                subdirs: [
-                    { name: '/backups/daily_snapshots', size: '1100 GB' },
-                    { name: '/backups/raw_pcaps', size: '620 GB' }
-                ]
-            },
-            {
-                id: 'vault',
-                name: 'Crypto Vault & Logs',
-                mount: '/var/log/vault',
-                icon: 'fa-vault',
-                totalGB: 300,
-                usedGB: 95,
-                freeGB: 190,
-                sysGB: 15,
-                readSpeed: 21.0,
-                writeSpeed: 8.5,
-                alertLevel: 'NORMAL',
-                subdirs: [
-                    { name: '/encrypted_keys', size: '12 GB' },
-                    { name: '/audit_trails', size: '83 GB' }
-                ]
-            }
-        ];
-
-        // Network Topology Nodes
-        let networkNodes = [
-            { id: 1, name: 'Core Gateway', ip: '192.168.1.1', mac: '00:11:32:8A:9F:01', type: 'router', x: 0.5, y: 0.2, ping: 1.1, vendor: 'Cisco Systems', ports: ['22', '443', '161'], sec: 'SNMPv3 Encrypted' },
-            { id: 2, name: 'Managed Switch A', ip: '192.168.1.2', mac: '00:11:32:8A:9F:02', type: 'switch', x: 0.3, y: 0.45, ping: 1.8, vendor: 'Arista Networks', ports: ['22', '80'], sec: 'TLS 1.3' },
-            { id: 3, name: 'Managed Switch B', ip: '192.168.1.3', mac: '00:11:32:8A:9F:03', type: 'switch', x: 0.7, y: 0.45, ping: 2.1, vendor: 'Arista Networks', ports: ['22'], sec: 'TLS 1.3' },
-            { id: 4, name: 'Database Server 01', ip: '192.168.1.10', mac: '52:54:00:12:34:56', type: 'server', x: 0.15, y: 0.75, ping: 0.8, vendor: 'Dell Enterprise', ports: ['5432', '22', '9100'], sec: 'AES-256 Vault' },
-            { id: 5, name: 'Web App Node', ip: '192.168.1.11', mac: '52:54:00:12:34:57', type: 'server', x: 0.35, y: 0.75, ping: 1.2, vendor: 'Dell Enterprise', ports: ['80', '443', '22'], sec: 'TLS 1.3' },
-            { id: 6, name: 'SOC Analyst Workstation', ip: '192.168.1.50', mac: 'AC:DE:48:00:11:22', type: 'workstation', x: 0.65, y: 0.75, ping: 3.4, vendor: 'Apple Inc.', ports: ['22'], sec: 'Encrypted' },
-            { id: 7, name: 'IoT Camera Node', ip: '192.168.1.105', mac: 'B8:27:EB:4A:11:99', type: 'iot', x: 0.85, y: 0.75, ping: 8.5, vendor: 'Raspberry Pi Foundation', ports: ['554/RTSP'], sec: 'Warning Port 80 Open' }
-        ];
-
-        let selectedNode = null;
-        let currentFilter = 'ALL';
-
-        /* ==========================================================================
-           2. RENDERERS & INITIALIZERS
-           ========================================================================== */
-
-        window.onload = function() {
-            renderStorageCards();
-            initHealthGauge();
-            initTopologyCanvas();
-            initPerformanceCharts();
-            seedInitialLogs();
-
-            // Start continuous simulated WebSocket updates
-            setInterval(simulateLiveTelemetry, 1200);
-        };
-
-        /* RENDER SECTION-WISE STORAGE CARDS */
-        function renderStorageCards() {
-            const container = document.getElementById('storageCardsContainer');
-            container.innerHTML = '';
-
-            let globalRead = 0;
-            let globalWrite = 0;
-
-            storageSections.forEach(sec => {
-                const usedPerc = Math.round((sec.usedGB / sec.totalGB) * 100);
-                const freePerc = Math.round((sec.freeGB / sec.totalGB) * 100);
-                const sysPerc = Math.round((sec.sysGB / sec.totalGB) * 100);
-
-                globalRead += sec.readSpeed;
-                globalWrite += sec.writeSpeed;
-
-                // Determine border glow & status badge
-                let statusBadge = '<span class="px-1.5 py-0.5 text-[9px] bg-emerald-950 text-emerald-400 border border-emerald-800 rounded font-mono">HEALTHY</span>';
-                let borderClass = 'border-slate-800 hover:border-cyan-500/50';
-
-                if (usedPerc > 85) {
-                    statusBadge = '<span class="px-1.5 py-0.5 text-[9px] bg-red-950 text-red-400 border border-red-800 rounded font-mono animate-pulse">CRITICAL >85%</span>';
-                    borderClass = 'border-red-900/80 glow-red';
-                } else if (usedPerc > 75) {
-                    statusBadge = '<span class="px-1.5 py-0.5 text-[9px] bg-amber-950 text-amber-400 border border-amber-800 rounded font-mono">HIGH SPACE</span>';
-                    borderClass = 'border-amber-900/80 glow-amber';
-                }
-
-                const cardHtml = `
-                    <div onclick="openStorageModal('${sec.id}')" class="bg-slate-950/90 border ${borderClass} rounded-xl p-3 flex flex-col justify-between transition-all hover:scale-[1.01] cursor-pointer group">
-                        <div>
-                            <div class="flex items-center justify-between mb-2">
-                                <div class="flex items-center gap-2">
-                                    <i class="fa-solid ${sec.icon} text-purple-400 text-sm group-hover:text-cyan-400 transition"></i>
-                                    <span class="font-bold text-xs text-slate-200">${sec.name}</span>
-                                </div>
-                                ${statusBadge}
-                            </div>
-                            <div class="text-[11px] font-mono text-slate-400 mb-2">${sec.mount}</div>
-
-                            <!-- Progress Segment Bar -->
-                            <div class="space-y-1">
-                                <div class="flex justify-between text-[11px] font-mono">
-                                    <span class="text-slate-300 font-bold">${sec.usedGB} GB <span class="text-slate-500 text-[9px]">/ ${sec.totalGB} GB</span></span>
-                                    <span class="${usedPerc > 85 ? 'text-red-400' : 'text-cyan-400'} font-bold">${usedPerc}%</span>
-                                </div>
-                                <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden flex">
-                                    <div class="bg-cyan-500 h-full transition-all duration-500" style="width: ${usedPerc}%"></div>
-                                    <div class="bg-emerald-500 h-full transition-all duration-500" style="width: ${freePerc}%"></div>
-                                    <div class="bg-purple-500 h-full transition-all duration-500" style="width: ${sysPerc}%"></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Live Read/Write Sparkline Footer -->
-                        <div class="mt-3 pt-2 border-t border-slate-900 flex items-center justify-between text-[10px] font-mono">
-                            <span class="text-slate-400 flex items-center gap-1">
-                                <i class="fa-solid fa-arrow-down-long text-emerald-400"></i> R: <span class="text-slate-200">${sec.readSpeed.toFixed(1)} MB/s</span>
-                            </span>
-                            <span class="text-slate-400 flex items-center gap-1">
-                                <i class="fa-solid fa-arrow-up-long text-cyan-400"></i> W: <span class="text-slate-200">${sec.writeSpeed.toFixed(1)} MB/s</span>
-                            </span>
-                        </div>
-                    </div>
-                `;
-                container.innerHTML += cardHtml;
-            });
-
-            document.getElementById('globalIORate').innerText = `Read ${globalRead.toFixed(1)} MB/s | Write ${globalWrite.toFixed(1)} MB/s`;
-        }
-
-        /* SECURITY HEALTH RADIAL GAUGE CANVAS */
-        function initHealthGauge() {
-            const canvas = document.getElementById('healthGaugeCanvas');
-            const ctx = canvas.getContext('2d');
-            const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2;
-            const radius = 70;
-
-            function draw(score) {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-                // Background track
-                ctx.beginPath();
-                ctx.arc(centerX, centerY, radius, 0.75 * Math.PI, 2.25 * Math.PI);
-                ctx.strokeStyle = '#1e293b';
-                ctx.lineWidth = 12;
-                ctx.lineCap = 'round';
-                ctx.stroke();
-
-                // Foreground arc
-                const endAngle = (0.75 + (score / 100) * 1.5) * Math.PI;
-                ctx.beginPath();
-                ctx.arc(centerX, centerY, radius, 0.75 * Math.PI, endAngle);
-
-                // Gradient
-                const grad = ctx.createLinearGradient(0, 0, canvas.width, 0);
-                grad.addColorStop(0, '#06b6d4');
-                grad.addColorStop(1, '#10b981');
-                ctx.strokeStyle = grad;
-                ctx.lineWidth = 12;
-                ctx.lineCap = 'round';
-                ctx.stroke();
-            }
-
-            draw(96);
-        }
-
-        /* ==========================================================================
-           3. INTERACTIVE 2D TOPOLOGY CANVAS GRAPH
-           ========================================================================== */
-
-        let canvas, ctx;
-        let pulseOffset = 0;
-
-        function initTopologyCanvas() {
-            canvas = document.getElementById('topologyCanvas');
-            ctx = canvas.getContext('2d');
-
-            function resize() {
-                canvas.width = canvas.parentElement.clientWidth;
-                canvas.height = canvas.parentElement.clientHeight;
-            }
-            resize();
-            window.addEventListener('resize', resize);
-
-            // Node Click Inspector Event
-            canvas.addEventListener('click', function(e) {
-                const rect = canvas.getBoundingClientRect();
-                const mouseX = e.clientX - rect.left;
-                const mouseY = e.clientY - rect.top;
-
-                let clicked = null;
-                networkNodes.forEach(node => {
-                    const nx = node.x * canvas.width;
-                    const ny = node.y * canvas.height;
-                    const dist = Math.hypot(mouseX - nx, mouseY - ny);
-                    if (dist < 22) {
-                        clicked = node;
-                    }
-                });
-
-                if (clicked) {
-                    selectedNode = clicked;
-                    showNodeInspector(clicked);
-                }
-            });
-
-            requestAnimationFrame(animateTopology);
-        }
-
-        function animateTopology() {
-            if (!canvas || !ctx) return;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            const w = canvas.width;
-            const h = canvas.height;
-
-            // Draw Connection Lines
-            ctx.strokeStyle = '#1e293b';
-            ctx.lineWidth = 2;
-
-            // Connect Gateway (Node 1) to Switches (Nodes 2, 3)
-            drawLink(networkNodes[0], networkNodes[1], w, h);
-            drawLink(networkNodes[0], networkNodes[2], w, h);
-            // Connect Switch A to Servers
-            drawLink(networkNodes[1], networkNodes[3], w, h);
-            drawLink(networkNodes[1], networkNodes[4], w, h);
-            // Connect Switch B to Workstations & IoT
-            drawLink(networkNodes[2], networkNodes[5], w, h);
-            drawLink(networkNodes[2], networkNodes[6], w, h);
-
-            // Dynamic Traffic Pulses along wires
-            pulseOffset += 0.008;
-            if (pulseOffset > 1) pulseOffset = 0;
-            drawPulseOnLink(networkNodes[0], networkNodes[1], pulseOffset, w, h);
-            drawPulseOnLink(networkNodes[1], networkNodes[4], pulseOffset, w, h);
-
-            // Draw Nodes
-            networkNodes.forEach(node => {
-                const nx = node.x * w;
-                const ny = node.y * h;
-
-                // Node Halo Glow
-                ctx.beginPath();
-                ctx.arc(nx, ny, selectedNode === node ? 24 : 18, 0, Math.PI * 2);
-                ctx.fillStyle = selectedNode === node ? 'rgba(6, 182, 212, 0.25)' : 'rgba(30, 41, 59, 0.6)';
-                ctx.fill();
-
-                // Outer Ring
-                ctx.strokeStyle = selectedNode === node ? '#06b6d4' : (node.type === 'router' ? '#06b6d4' : '#334155');
-                ctx.lineWidth = selectedNode === node ? 3 : 2;
-                ctx.stroke();
-
-                // Node Center Circle
-                ctx.beginPath();
-                ctx.arc(nx, ny, 10, 0, Math.PI * 2);
-                ctx.fillStyle = node.type === 'router' ? '#0284c7' : (node.type === 'server' ? '#7c3aed' : '#0f172a');
-                ctx.fill();
-
-                // Text Label below
-                ctx.fillStyle = '#94a3b8';
-                ctx.font = '10px JetBrains Mono';
-                ctx.textAlign = 'center';
-                ctx.fillText(node.name, nx, ny + 28);
-                ctx.fillStyle = '#06b6d4';
-                ctx.fillText(node.ip, nx, ny + 40);
-            });
-
-            requestAnimationFrame(animateTopology);
-        }
-
-        function drawLink(n1, n2, w, h) {
-            ctx.beginPath();
-            ctx.moveTo(n1.x * w, n1.y * h);
-            ctx.lineTo(n2.x * w, n2.y * h);
-            ctx.stroke();
-        }
-
-        function drawPulseOnLink(n1, n2, progress, w, h) {
-            const x1 = n1.x * w, y1 = n1.y * h;
-            const x2 = n2.x * w, y2 = n2.y * h;
-            const px = x1 + (x2 - x1) * progress;
-            const py = y1 + (y2 - y1) * progress;
-
-            ctx.beginPath();
-            ctx.arc(px, py, 3.5, 0, Math.PI * 2);
-            ctx.fillStyle = '#10b981';
-            ctx.shadowColor = '#10b981';
-            ctx.shadowBlur = 8;
-            ctx.fill();
-            ctx.shadowBlur = 0; // Reset
-        }
-
-        function showNodeInspector(node) {
-            document.getElementById('nodeInspector').classList.remove('hidden');
-            document.getElementById('insp-name').innerText = node.name;
-            document.getElementById('insp-ip').innerText = node.ip;
-            document.getElementById('insp-mac').innerText = node.mac;
-            document.getElementById('insp-vendor').innerText = node.vendor;
-            document.getElementById('insp-ping').innerText = `${node.ping} ms / 0.1ms`;
-            document.getElementById('insp-sec').innerText = node.sec;
-
-            const portsDiv = document.getElementById('insp-ports');
-            portsDiv.innerHTML = node.ports.map(p => `<span class="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-[10px] text-cyan-300">${p}</span>`).join('');
-        }
-
-        function closeInspector() {
-            document.getElementById('nodeInspector').classList.add('hidden');
-            selectedNode = null;
-        }
-
-        function resetGraphZoom() {
-            closeInspector();
-            addTerminalLog('INFO', 'Topology map view reset to auto-fit.');
-        }
-
-        function triggerSimulatedScan() {
-            addTerminalLog('SEC_ALERT', 'ARP Probe sent across 192.168.1.0/24 subnet. Validating cryptographic signatures...');
-            setTimeout(() => {
-                addTerminalLog('INFO', 'Subnet discovery complete: 24 active devices verified, 0 rogue MACs found.');
-            }, 800);
-        }
-
-        /* ==========================================================================
-           4. REAL-TIME CYBER TERMINAL & LOG STREAMING
-           ========================================================================== */
-
-        function seedInitialLogs() {
-            addTerminalLog('INFO', 'CyberGuard Daemon initialized. Listening on wss://127.0.0.1:8765');
-            addTerminalLog('INFO', 'AES-256-GCM Vault Loaded. Master key hash verified.');
-            addTerminalLog('INFO', 'SNMPv3 Polling agent started (Interval: 1000ms)');
-            addTerminalLog('WARN', 'Mount /mnt/network_backup space usage exceeds 85% threshold!');
-        }
-
-        function addTerminalLog(type, text) {
-            const container = document.getElementById('terminalOutput');
-            if (!container) return;
-
-            const time = new Date().toISOString().substring(11, 19);
-            let colorClass = 'text-slate-300';
-            let badge = '[INFO]';
-
-            if (type === 'WARN') {
-                colorClass = 'text-amber-300';
-                badge = '[WARN]';
-            } else if (type === 'SEC_ALERT') {
-                colorClass = 'text-red-400 font-bold';
-                badge = '[ALERT]';
-            }
-
-            // Respect Log Filter
-            if (currentFilter === 'WARN' && type !== 'WARN') return;
-            if (currentFilter === 'SEC' && type !== 'SEC_ALERT') return;
-
-            const lineHtml = `
-                <div class="term-line ${colorClass}">
-                    <span class="text-slate-500">[${time}]</span> <span class="font-bold">${badge}</span> ${text}
-                </div>
-            `;
-
-            container.innerHTML += lineHtml;
-            container.scrollTop = container.scrollHeight;
-        }
-
-        function setLogFilter(filter) {
-            currentFilter = filter;
-            addTerminalLog('INFO', `Terminal log filter updated to: ${filter}`);
-        }
-
-        function execTermCmd() {
-            const input = document.getElementById('termInput');
-            const val = input.value.trim();
-            if (!val) return;
-
-            addTerminalLog('INFO', `> ${val}`);
-            input.value = '';
-
-            const cmd = val.toLowerCase();
-            if (cmd === 'clear') {
-                document.getElementById('terminalOutput').innerHTML = '';
-            } else if (cmd === 'scan') {
-                triggerSimulatedScan();
-            } else if (cmd === 'vault-status') {
-                addTerminalLog('INFO', 'Vault: 14 credentials locked with AES-256-GCM. HMAC Integrity OK.');
-            } else if (cmd === 'check-arp') {
-                addTerminalLog('INFO', 'ARP Shield: Inspecting ARP Cache table... No duplicate IP bindings found.');
-            } else {
-                addTerminalLog('WARN', `Unknown command '${val}'. Available: scan, clear, check-arp, vault-status`);
-            }
-        }
-
-        /* ==========================================================================
-           5. PERFORMANCE CANVAS CHARTS (THROUGHPUT & LATENCY)
-           ========================================================================== */
-
-        let bwData = Array(25).fill(110);
-        let pingData = Array(25).fill(2.4);
-
-        function initPerformanceCharts() {
-            animateBwChart();
-            animatePingChart();
-        }
-
-        function animateBwChart() {
-            const canvas = document.getElementById('bandwidthChartCanvas');
-            if (!canvas) return;
-            const ctx = canvas.getContext('2d');
-            canvas.width = canvas.parentElement.clientWidth;
-            canvas.height = canvas.parentElement.clientHeight;
-
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Draw line
-            ctx.beginPath();
-            const step = canvas.width / (bwData.length - 1);
-            bwData.forEach((val, idx) => {
-                const x = idx * step;
-                const y = canvas.height - (val / 200) * canvas.height;
-                if (idx === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-            });
-
-            ctx.strokeStyle = '#06b6d4';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-
-            // Gradient Fill below line
-            ctx.lineTo(canvas.width, canvas.height);
-            ctx.lineTo(0, canvas.height);
-            const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            grad.addColorStop(0, 'rgba(6, 182, 212, 0.25)');
-            grad.addColorStop(1, 'rgba(6, 182, 212, 0.0)');
-            ctx.fillStyle = grad;
-            ctx.fill();
-        }
-
-        function animatePingChart() {
-            const canvas = document.getElementById('pingChartCanvas');
-            if (!canvas) return;
-            const ctx = canvas.getContext('2d');
-            canvas.width = canvas.parentElement.clientWidth;
-            canvas.height = canvas.parentElement.clientHeight;
-
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            ctx.beginPath();
-            const step = canvas.width / (pingData.length - 1);
-            pingData.forEach((val, idx) => {
-                const x = idx * step;
-                const y = canvas.height - (val / 10) * canvas.height;
-                if (idx === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-            });
-
-            ctx.strokeStyle = '#10b981';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-        }
-
-        /* ==========================================================================
-           6. LIVE SIMULATION TELEMETRY ENGINE
-           ========================================================================== */
-
-        function simulateLiveTelemetry() {
-            // Fluctuate Storage Read/Write Speeds
-            storageSections.forEach(sec => {
-                sec.readSpeed = Math.max(5, sec.readSpeed + (Math.random() * 6 - 3));
-                sec.writeSpeed = Math.max(2, sec.writeSpeed + (Math.random() * 4 - 2));
-            });
-            renderStorageCards();
-
-            // Fluctuate Bandwidth & Ping Chart
-            const newBw = Math.min(190, Math.max(80, bwData[bwData.length - 1] + (Math.random() * 16 - 8)));
-            bwData.shift();
-            bwData.push(newBw);
-            document.getElementById('liveBwVal').innerText = `DL: ${newBw.toFixed(1)} MB/s | UL: ${(newBw * 0.25).toFixed(1)} MB/s`;
-            animateBwChart();
-
-            const newPing = Math.min(8, Math.max(1.2, pingData[pingData.length - 1] + (Math.random() * 0.6 - 0.3)));
-            pingData.shift();
-            pingData.push(newPing);
-            document.getElementById('livePingVal').innerText = `Avg: ${newPing.toFixed(1)} ms | Jitter: 0.2 ms`;
-            animatePingChart();
-
-            // Random Log Stream Trigger
-            if (Math.random() < 0.25) {
-                const logs = [
-                    "SNMPv3 telemetry packet received from Core-Gateway (AES-128 decrypted).",
-                    "Storage telemetry tick: /var/lib/data I/O write burst completed.",
-                    "TLS 1.3 handshake re-negotiated for 192.168.1.11.",
-                    "ARP table verify: 0 duplicate hardware addresses detected."
-                ];
-                addTerminalLog('INFO', logs[Math.floor(Math.random() * logs.length)]);
-            }
-        }
-
-        function refreshStorageMetrics() {
-            addTerminalLog('INFO', 'Forced sync of psutil storage partitions completed.');
-            renderStorageCards();
-        }
-
-        /* ==========================================================================
-           7. MODAL INSPECTORS & CODE ARCHITECTURE VIEWER
-           ========================================================================== */
-
-        function openStorageModal(secId) {
-            const sec = storageSections.find(s => s.id === secId);
-            if (!sec) return;
-
-            document.getElementById('modalSectionTitle').innerText = sec.name;
-            document.getElementById('modalMountPoint').innerText = `Mount Point: ${sec.mount}`;
-            document.getElementById('modalTotalCap').innerText = `${sec.totalGB} GB`;
-            document.getElementById('modalUsedCap').innerText = `${sec.usedGB} GB`;
-            document.getElementById('modalFreeCap').innerText = `${sec.freeGB} GB`;
-
-            const usedPerc = Math.round((sec.usedGB / sec.totalGB) * 100);
-            const freePerc = Math.round((sec.freeGB / sec.totalGB) * 100);
-            const sysPerc = Math.round((sec.sysGB / sec.totalGB) * 100);
-
-            document.getElementById('modalPercText').innerText = `${usedPerc}% Used Space`;
-            document.getElementById('modalBarUsed').style.width = `${usedPerc}%`;
-            document.getElementById('modalBarFree').style.width = `${freePerc}%`;
-            document.getElementById('modalBarSys').style.width = `${sysPerc}%`;
-
-            const subContainer = document.getElementById('modalSubdirs');
-            subContainer.innerHTML = sec.subdirs.map(d => `
-                <div class="flex justify-between items-center text-slate-300">
-                    <span class="font-mono text-cyan-400">${d.name}</span>
-                    <span class="font-bold text-slate-200">${d.size}</span>
-                </div>
-            `).join('');
-
-            document.getElementById('storageModal').classList.remove('hidden');
-        }
-
-        function closeStorageModal() {
-            document.getElementById('storageModal').classList.add('hidden');
-        }
-
-        /* PYTHON CODE SNIPPETS STORAGE */
-        const pythonSnippets = {
-            vault: `# =====================================================================
-# 1. AES-256-GCM CREDENTIAL VAULT ENGINE (Security & Encryption)
-# =====================================================================
-import os
-import base64
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-
-class SecurityVaultAES256:
-    """
-    Zero-Knowledge Credential Vault using AES-256-GCM authenticated encryption.
-    Stores SSH keys, SNMPv3 secrets, and router credentials securely.
-    """
-    def __init__(self, master_key_bytes: bytes = None):
-        # Generate 256-bit key if not provided
-        self.key = master_key_bytes or AESGCM.generate_key(bit_length=256)
-        self.aesgcm = AESGCM(self.key)
-
-    def encrypt_secret(self, plaintext_secret: str) -> dict:
-        """Encrypts secret with a unique 96-bit random nonce."""
-        nonce = os.urandom(12)  # 12-byte initialization vector
-        data = plaintext_secret.encode('utf-8')
-        ciphertext = self.aesgcm.encrypt(nonce, data, associated_data=b"CYBERGUARD_HMAC")
-
-        return {
-            "ciphertext": base64.b64encode(ciphertext).decode('utf-8'),
-            "nonce": base64.b64encode(nonce).decode('utf-8')
-        }
-
-    def decrypt_secret(self, encrypted_payload: dict) -> str:
-        """Decrypts and authenticates encrypted secret payload."""
-        ciphertext = base64.b64decode(encrypted_payload["ciphertext"])
-        nonce = base64.b64decode(encrypted_payload["nonce"])
-
-        decrypted_bytes = self.aesgcm.decrypt(nonce, ciphertext, associated_data=b"CYBERGUARD_HMAC")
-        return decrypted_bytes.decode('utf-8')
-
-# Example Usage
-if __name__ == "__main__":
-    vault = SecurityVaultAES256()
-    encrypted = vault.encrypt_secret("RouterAdmin_SecretPass123!")
-    print(f"[+] Encrypted Vault Payload: {encrypted}")
-    decrypted = vault.decrypt_secret(encrypted)
-    print(f"[+] Decrypted Secret: {decrypted}")`,
-
-            storage: `# =====================================================================
-# 2. LIVE SECTION-WISE STORAGE & HARDWARE TELEMETRY ENGINE
-# =====================================================================
-import psutil
-import time
-
-def get_section_wise_storage_metrics():
-    """
-    Polls live system storage partitioned section-wise.
-    Calculates dynamic read/write I/O speeds and usage ratios.
-    """
-    storage_sections = []
-
-    # Iterate all mounted disk partitions
-    partitions = psutil.disk_partitions(all=False)
-    disk_io = psutil.disk_io_counters(perdisk=False)
-
-    for part in partitions:
-        try:
-            usage = psutil.disk_usage(part.mountpoint)
-
-            section_info = {
-                "device": part.device,
-                "mountpoint": part.mountpoint,
-                "fstype": part.fstype,
-                "total_gb": round(usage.total / (1024 ** 3), 2),
-                "used_gb": round(usage.used / (1024 ** 3), 2),
-                "free_gb": round(usage.free / (1024 ** 3), 2),
-                "percent_used": usage.percent,
-                "read_mb_s": round(disk_io.read_bytes / (1024 ** 2), 2) if disk_io else 0.0,
-                "write_mb_s": round(disk_io.write_bytes / (1024 ** 2), 2) if disk_io else 0.0,
-                "alert": "CRITICAL" if usage.percent > 85 else ("WARNING" if usage.percent > 75 else "NORMAL")
-            }
-            storage_sections.append(section_info)
-        except PermissionError:
-            continue
-
-    return storage_sections
-
-if __name__ == "__main__":
-    metrics = get_section_wise_storage_metrics()
-    print("[+] Live Section Storage Telemetry:", metrics)`,
-
-            arp: `# =====================================================================
-# 3. REAL-TIME ARP SPOOFING / POISONING DETECTION ENGINE
-# =====================================================================
-import scapy.all as scapy
-import time
-
-class ARPSpoofDetector:
-    """
-    Monitors incoming ARP packets for duplicate MAC addresses bound to single IPs
-    to prevent Man-In-The-Middle (MITM) attacks on the local network.
-    """
-    def __init__(self):
-        self.ip_mac_table = {}
-
-    def process_arp_packet(self, packet):
-        if packet.haslayer(scapy.ARP) and packet[scapy.ARP].op == 2: # ARP Response
-            src_ip = packet[scapy.ARP].psrc
-            src_mac = packet[scapy.ARP].hwsrc
-
-            if src_ip in self.ip_mac_table:
-                real_mac = self.ip_mac_table[src_ip]
-                if real_mac != src_mac:
-                    print(f"[!!!] ALERT: ARP Spoofing Detected! IP {src_ip} claimed by MAC {src_mac} (Real MAC: {real_mac})")
-                    return True
-            else:
-                self.ip_mac_table[src_ip] = src_mac
-        return False
-
-# Scapy Sniffer loop call
-# scapy.sniff(store=0, prn=ARPSpoofDetector().process_arp_packet)`,
-
-            wss: `# =====================================================================
-# 4. SECURE WEBSOCKET TELEMETRY SERVER (wss://)
-# =====================================================================
-import asyncio
-import json
-import websockets
-
-async def push_telemetry_stream(websocket, path):
-    """
-    Pushes live section-wise storage metrics and topology updates to web dashboard.
-    """
-    print("[+] Client connected to Secure Telemetry Stream")
-    try:
-        while True:
-            payload = {
-                "timestamp": time.time(),
-                "throughput_mbps": 142.8,
-                "security_health": 96,
-                "active_devices": 24
-            }
-            await websocket.send(json.dumps(payload))
-            await asyncio.sleep(1.0) # 1 sec update
-    except websockets.exceptions.ConnectionClosed:
-        print("[-] Client disconnected")
-
-# Start WSS Server
-# start_server = websockets.serve(push_telemetry_stream, "0.0.0.0", 8765)
-# asyncio.get_event_loop().run_until_complete(start_server)
-# asyncio.get_event_loop().run_forever()`
-        };
-
-        let currentTab = 'vault';
-
-        function openCodeModal() {
-            document.getElementById('codeModal').classList.remove('hidden');
-            switchCodeTab('vault');
-        }
-
-        function closeCodeModal() {
-            document.getElementById('codeModal').classList.add('hidden');
-        }
-
-        function switchCodeTab(tab) {
-            currentTab = tab;
-            ['vault', 'storage', 'arp', 'wss'].forEach(t => {
-                const el = document.getElementById(`tab-${t}`);
-                if (t === tab) {
-                    el.className = "px-3 py-2 border-b-2 border-cyan-400 text-cyan-300 font-bold";
-                } else {
-                    el.className = "px-3 py-2 text-slate-400 border-b-2 border-transparent hover:text-slate-200";
-                }
-            });
-
-            document.getElementById('codeSnippetBox').innerText = pythonSnippets[tab];
-        }
-
-        function copyCodeContent() {
-            const text = pythonSnippets[currentTab];
-            const temp = document.createElement('textarea');
-            temp.value = text;
-            document.body.appendChild(temp);
-            temp.select();
-            document.execCommand('copy');
-            document.body.removeChild(temp);
-            alert("Code copied to clipboard!");
-        }
-    </script>
+  <script src="assets/js/app.js" defer></script>
 </body>
 </html>

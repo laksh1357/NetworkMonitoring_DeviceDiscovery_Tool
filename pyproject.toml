@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "network-monitoring-tool"
+name = "lan-watchtower"
 version = "0.2.0"
-description = "NOC Operations Intelligence Engine & Device Discovery Tool"
+description = "Local-first LAN device discovery and network monitoring"
 readme = "README.md"
 authors = [
     {name = "Lakshya Singh"}
