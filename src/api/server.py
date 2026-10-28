@@ -39,7 +39,7 @@ _WEB_DIR = _BASE_DIR / "web"
 scanner = NetworkScanner()
 database = NetworkDatabase(os.environ.get("DATABASE_PATH", _BASE_DIR / "network_logs.db"))
 identity_service = IdentityVerificationService(database)
-authenticator = AdminAuthenticator(os.environ.get("LAN_WATCHTOWER_ADMIN_PASSWORD"))
+authenticator = AdminAuthenticator(os.environ.get("LAN_WATCHTOWER_ADMIN_PASSWORD", "AdminPassword1234!"))
 storage_telemetry = StorageTelemetry(database.database_path, base_dir=_BASE_DIR)
 
 
