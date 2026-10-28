@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import os
+import shutil
 import threading
 import time
 from pathlib import Path
 from typing import Any
 
-import psutil
+try:
+    import psutil
+except ImportError:
+    psutil = None
 
 
 def _existing_path(path: Path) -> Path:
@@ -64,19 +68,29 @@ class StorageTelemetry:
     @staticmethod
     def _zone(zone_id: str, label: str, path: Path, *, filesystem: bool = False) -> dict[str, Any]:
         measured_path = _existing_path(path)
-        usage = psutil.disk_usage(str(measured_path))
-        zone_bytes = usage.used if filesystem else _directory_size(path)
+        if psutil is not None:
+            usage = psutil.disk_usage(str(measured_path))
+            total = usage.total
+            free = usage.free
+            used = usage.used
+            percent = usage.percent
+        else:
+            total, used, free = shutil.disk_usage(str(measured_path))
+            percent = round((used / total) * 100, 1) if total > 0 else 0.0
+        zone_bytes = used if filesystem else _directory_size(path)
         return {
             "id": zone_id,
             "label": label,
             "path": str(path),
             "used_bytes": zone_bytes,
-            "volume_total_bytes": usage.total,
-            "volume_free_bytes": usage.free,
-            "volume_used_percent": usage.percent,
+            "volume_total_bytes": total,
+            "volume_free_bytes": free,
+            "volume_used_percent": percent,
         }
 
     def _disk_io(self) -> dict[str, float | str]:
+        if psutil is None:
+            return {"status": "unavailable", "error": "psutil library not installed"}
         counters = psutil.disk_io_counters()
         if counters is None:
             return {"status": "unavailable", "error": "Host disk I/O counters are unavailable"}

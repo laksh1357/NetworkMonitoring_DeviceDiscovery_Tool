@@ -1,9 +1,11 @@
 (() => {
   const refreshIntervalMs = 5000;
+  const TOKEN_KEY = 'lan_watchtower_token';
   const state = {
     devices: [],
     topologyNodes: [],
     scanRunning: false,
+    user: null,
     topologyPositions: new Map(),
     topologyTransform: { zoom: 1, panX: 0, panY: 0 },
     topologyDrag: null,
@@ -11,6 +13,17 @@
   const elements = {
     connection: document.getElementById('connection-status'),
     connectionLabel: document.getElementById('connection-label'),
+    userPill: document.getElementById('user-pill'),
+    userAvatar: document.getElementById('user-avatar-initials'),
+    userName: document.getElementById('user-name-label'),
+    userRole: document.getElementById('user-role-badge'),
+    signoutBtn: document.getElementById('signout-button'),
+    authModal: document.getElementById('auth-modal'),
+    authForm: document.getElementById('auth-form'),
+    authUsername: document.getElementById('auth-username'),
+    authPassword: document.getElementById('auth-password'),
+    authError: document.getElementById('auth-error-banner'),
+    authSubmit: document.getElementById('auth-submit-btn'),
     error: document.getElementById('error-banner'),
     online: document.getElementById('metric-online'),
     total: document.getElementById('metric-total'),
@@ -38,17 +51,67 @@
     lastUpdated: document.getElementById('last-updated'),
   };
 
+  function getToken() {
+    return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
+  }
+
+  function setToken(token) {
+    if (token) {
+      localStorage.setItem(TOKEN_KEY, token);
+    } else {
+      localStorage.removeItem(TOKEN_KEY);
+      sessionStorage.removeItem(TOKEN_KEY);
+    }
+  }
+
+  function showAuthModal() {
+    elements.authModal.hidden = false;
+    elements.authError.hidden = true;
+    elements.authPassword.value = '';
+    elements.authUsername.focus();
+  }
+
+  function hideAuthModal() {
+    elements.authModal.hidden = true;
+    elements.authError.hidden = true;
+    elements.authError.textContent = '';
+  }
+
+  function renderUserBadge(user) {
+    if (!user) {
+      elements.userPill.hidden = true;
+      return;
+    }
+    const name = user.display_name || user.username || 'Operator';
+    const initials = name.split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase() || 'OP';
+    elements.userAvatar.textContent = initials;
+    elements.userName.textContent = name;
+    elements.userRole.textContent = user.role || 'operator';
+    elements.userPill.hidden = false;
+  }
+
   async function requestJSON(path, options = {}) {
+    const headers = {
+      Accept: 'application/json',
+      ...window.watchtowerAuth?.headers(),
+      ...options.headers,
+    };
+    const token = getToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
     const response = await fetch(path, {
       ...options,
-      headers: {
-        Accept: 'application/json',
-        ...window.watchtowerAuth?.headers(),
-        ...options.headers,
-      },
+      headers,
     });
     const contentType = response.headers.get('content-type') || '';
     const body = contentType.includes('application/json') ? await response.json() : null;
+    if (response.status === 401 && path !== '/api/auth/login') {
+      setToken(null);
+      renderUserBadge(null);
+      showAuthModal();
+      throw new Error('Authentication required');
+    }
     if (!response.ok) {
       if (response.status === 401) window.watchtowerAuth?.refresh();
       throw new Error(body?.error || `Request failed (${response.status})`);
@@ -363,6 +426,65 @@
     }
   });
 
+  elements.authForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    elements.authError.hidden = true;
+    elements.authSubmit.disabled = true;
+    elements.authSubmit.textContent = 'Verifying…';
+    try {
+      const result = await requestJSON('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: elements.authUsername.value.trim(),
+          password: elements.authPassword.value,
+        }),
+      });
+      setToken(result.token);
+      state.user = result.user;
+      renderUserBadge(result.user);
+      hideAuthModal();
+      await refreshSubnet().catch(() => {});
+      await refreshDashboard();
+    } catch (error) {
+      elements.authError.textContent = error.message || 'Login failed';
+      elements.authError.hidden = false;
+    } finally {
+      elements.authSubmit.disabled = false;
+      elements.authSubmit.textContent = 'Sign in';
+    }
+  });
+
+  const fillCredsBtn = document.getElementById('fill-default-creds');
+  if (fillCredsBtn) {
+    fillCredsBtn.addEventListener('click', () => {
+      elements.authUsername.value = 'admin';
+      elements.authPassword.value = 'admin123';
+      elements.authError.hidden = true;
+    });
+  }
+
+  const togglePwdBtn = document.getElementById('toggle-password-btn');
+  if (togglePwdBtn) {
+    togglePwdBtn.addEventListener('click', () => {
+      const isPassword = elements.authPassword.type === 'password';
+      elements.authPassword.type = isPassword ? 'text' : 'password';
+      togglePwdBtn.textContent = isPassword ? 'Hide' : 'Show';
+    });
+  }
+
+  if (elements.signoutBtn) {
+    elements.signoutBtn.addEventListener('click', async () => {
+      try {
+        await requestJSON('/api/auth/logout', { method: 'POST' });
+      } catch (_) {}
+      setToken(null);
+      state.user = null;
+      renderUserBadge(null);
+      showAuthModal();
+    });
+  }
+
   elements.search.addEventListener('input', renderDevices);
   document.getElementById('refresh-button').addEventListener('click', refreshDashboard);
   window.addEventListener('resize', drawTopology);
@@ -380,7 +502,28 @@
       setConnection(false);
     }
   });
+
+  async function initAuth() {
+    try {
+      const res = await requestJSON('/api/auth/me');
+      if (res.authenticated && res.user) {
+        state.user = res.user;
+        renderUserBadge(res.user);
+        hideAuthModal();
+        refreshSubnet().catch(reportError);
+        refreshDashboard();
+      } else {
+        showAuthModal();
+      }
+    } catch (e) {
+      showAuthModal();
+    }
+  }
+
+  initAuth();
   window.setInterval(() => {
-    if (window.watchtowerAuth?.authenticated) refreshDashboard();
+    if (getToken() || window.watchtowerAuth?.authenticated) {
+      refreshDashboard();
+    }
   }, refreshIntervalMs);
 })();

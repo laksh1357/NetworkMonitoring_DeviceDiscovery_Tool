@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import os
+import secrets
 import sqlite3
 import threading
 from collections.abc import Iterable
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -242,6 +244,29 @@ class NetworkDatabase:
                     email TEXT NOT NULL,
                     avatar_initials TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT NOT NULL UNIQUE,
+                    password_hash TEXT NOT NULL,
+                    salt TEXT NOT NULL,
+                    role TEXT NOT NULL DEFAULT 'admin',
+                    display_name TEXT NOT NULL DEFAULT 'Admin User',
+                    email TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    last_login TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS sessions (
+                    token TEXT PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    created_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_sessions_token_expires
+                    ON sessions(token, expires_at);
                 """
             )
             self._connection.execute(
@@ -251,6 +276,22 @@ class NetworkDatabase:
                 VALUES (1, 'Local Admin', 'Administrator', '', 'LA')
                 """
             )
+
+            # Seed default admin if no users exist
+            user_count = self._connection.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+            if user_count == 0:
+                default_password = os.environ.get("ADMIN_DEFAULT_PASSWORD", "admin123")
+                salt = secrets.token_hex(16)
+                pwd_hash = hashlib.pbkdf2_hmac(
+                    "sha256", default_password.encode("utf-8"), salt.encode("utf-8"), 100000
+                ).hex()
+                self._connection.execute(
+                    """
+                    INSERT INTO users (username, password_hash, salt, role, display_name, email, created_at)
+                    VALUES ('admin', ?, ?, 'admin', 'Administrator', 'admin@network.local', ?)
+                    """,
+                    (pwd_hash, salt, self._timestamp()),
+                )
             columns = {
                 row["name"]
                 for row in self._connection.execute("PRAGMA table_info(devices)").fetchall()
@@ -338,6 +379,7 @@ class NetworkDatabase:
         custom_name: str = "",
         notes: str = "",
         location: str = "Main Network",
+        **kwargs: Any,
     ) -> None:
         """Insert a device or update its current identity and last-seen time."""
         timestamp = seen_at or self._timestamp()
@@ -349,18 +391,21 @@ class NetworkDatabase:
                      device_type, custom_name, notes, location)
                 VALUES (?, ?, ?, ?, 'Online', ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(ip) DO UPDATE SET
-                    mac = excluded.mac,
-                    hostname = excluded.hostname,
-                    vendor = excluded.vendor,
+                    mac = CASE WHEN excluded.mac != 'Unknown' THEN excluded.mac ELSE devices.mac END,
+                    hostname = CASE WHEN excluded.hostname != 'Unknown' THEN excluded.hostname ELSE devices.hostname END,
+                    vendor = CASE WHEN excluded.vendor != 'Unknown' THEN excluded.vendor ELSE devices.vendor END,
                     status = 'Online',
                     latency_ms = excluded.latency_ms,
                     last_seen = excluded.last_seen,
-                    device_type = excluded.device_type
+                    device_type = CASE WHEN excluded.device_type != 'Unknown' THEN excluded.device_type ELSE devices.device_type END,
+                    custom_name = CASE WHEN excluded.custom_name != '' THEN excluded.custom_name ELSE devices.custom_name END,
+                    notes = CASE WHEN excluded.notes != '' THEN excluded.notes ELSE devices.notes END,
+                    location = CASE WHEN excluded.location != 'Main Network' THEN excluded.location ELSE devices.location END
                 """,
                 (
                     ip, mac or "Unknown", hostname or "Unknown", vendor or "Unknown",
                     None, timestamp, timestamp, device_type or "Unknown",
-                    custom_name, notes, location or "Main Network",
+                    custom_name or "", notes or "", location or "Main Network",
                 ),
             )
 
@@ -1357,6 +1402,310 @@ class NetworkDatabase:
                 "UPDATE identity_conflicts SET status = 'RESOLVED', resolved_at = ? WHERE id = ?",
                 (self._timestamp(), conflict_id),
             )
+
+    def update_device_meta(
+        self,
+        ip: str,
+        custom_name: str = "",
+        notes: str = "",
+        dev_type: str | None = None,
+        hostname: str | None = None,
+        vendor: str | None = None,
+        mac: str | None = None,
+        location: str | None = None,
+    ) -> None:
+        if not ip:
+            raise ValueError("ip is required")
+        with self._lock, self._connection:
+            updates = ["custom_name = ?", "notes = ?"]
+            params: list[Any] = [custom_name, notes]
+            if dev_type is not None:
+                updates.append("device_type = ?")
+                params.append(dev_type)
+            if hostname is not None:
+                updates.append("hostname = ?")
+                params.append(hostname)
+            if vendor is not None:
+                updates.append("vendor = ?")
+                params.append(vendor)
+            if mac is not None:
+                updates.append("mac = ?")
+                params.append(mac)
+            if location is not None:
+                updates.append("location = ?")
+                params.append(location)
+            params.append(ip)
+            self._connection.execute(
+                f"UPDATE devices SET {', '.join(updates)} WHERE ip = ?",
+                tuple(params),
+            )
+
+    def delete_device(self, ip: str) -> None:
+        if not ip:
+            raise ValueError("ip is required")
+        with self._lock, self._connection:
+            self._connection.execute("DELETE FROM devices WHERE ip = ?", (ip,))
+            self._connection.execute("DELETE FROM port_observations WHERE ip = ?", (ip,))
+            self._connection.execute("DELETE FROM port_states WHERE ip = ?", (ip,))
+            self._connection.execute("DELETE FROM health_history WHERE ip = ?", (ip,))
+            self._connection.execute("DELETE FROM device_events WHERE ip = ?", (ip,))
+
+    def insert_alert(
+        self,
+        severity: str,
+        title: str,
+        description: str,
+        ip: str | None = None,
+    ) -> dict[str, Any] | None:
+        sev = severity.lower()
+        if sev not in {"info", "warning", "critical"}:
+            sev = "info"
+        alert_type = title.upper().replace(" ", "_") if title else "SCAN_ALERT"
+        return self.create_alert(alert_type=alert_type, severity=sev, message=description or title, ip=ip)
+
+    def fetch_activity_logs(self, limit: int = 100) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT id, user_name, action_type, description, ip, timestamp FROM activity_logs ORDER BY id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def insert_activity_log(
+        self,
+        user_name: str,
+        action_type: str,
+        description: str,
+        ip: str = "",
+    ) -> None:
+        with self._lock, self._connection:
+            self._connection.execute(
+                "INSERT INTO activity_logs (user_name, action_type, description, ip, timestamp) VALUES (?, ?, ?, ?, ?)",
+                (user_name, action_type, description, ip, self._timestamp()),
+            )
+
+    def get_user_profile(self) -> dict[str, Any]:
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT display_name, role_title, email, avatar_initials, updated_at FROM user_profile WHERE id = 1"
+            ).fetchone()
+        if row:
+            return dict(row)
+        return {
+            "display_name": "Admin User",
+            "role_title": "Administrator",
+            "email": "admin@network.local",
+            "avatar_initials": "AU",
+            "updated_at": self._timestamp(),
+        }
+
+    def update_user_profile(
+        self,
+        display_name: str,
+        role_title: str,
+        email: str,
+        avatar_initials: str,
+    ) -> None:
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO user_profile (id, display_name, role_title, email, avatar_initials, updated_at)
+                VALUES (1, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    display_name = excluded.display_name,
+                    role_title = excluded.role_title,
+                    email = excluded.email,
+                    avatar_initials = excluded.avatar_initials,
+                    updated_at = excluded.updated_at
+                """,
+                (display_name, role_title, email, avatar_initials, self._timestamp()),
+            )
+
+    def clear_database(self) -> None:
+        with self._lock, self._connection:
+            self._connection.execute("DELETE FROM devices")
+            self._connection.execute("DELETE FROM scan_logs")
+            self._connection.execute("DELETE FROM scan_jobs")
+            self._connection.execute("DELETE FROM alerts")
+            self._connection.execute("DELETE FROM port_observations")
+            self._connection.execute("DELETE FROM port_states")
+            self._connection.execute("DELETE FROM port_events")
+            self._connection.execute("DELETE FROM health_history")
+            self._connection.execute("DELETE FROM device_events")
+            self._connection.execute("DELETE FROM network_observations")
+            self._connection.execute("DELETE FROM identity_conflicts")
+            self._connection.execute("DELETE FROM unresolved_behavior")
+            self._connection.execute("DELETE FROM notification_deliveries")
+            self._connection.execute("DELETE FROM activity_logs")
+
+    @staticmethod
+    def hash_password(password: str, salt: str | None = None) -> tuple[str, str]:
+        """Compute PBKDF2 hash using SHA-256 and return (hash_hex, salt_hex)."""
+        actual_salt = salt or secrets.token_hex(16)
+        pwd_hash = hashlib.pbkdf2_hmac(
+            "sha256", password.encode("utf-8"), actual_salt.encode("utf-8"), 100000
+        ).hex()
+        return pwd_hash, actual_salt
+
+    def create_user(
+        self,
+        username: str,
+        password: str,
+        role: str = "operator",
+        display_name: str = "",
+        email: str = "",
+    ) -> dict[str, Any]:
+        """Register a new user account with a hashed password."""
+        uname = username.strip().lower()
+        if not uname:
+            raise ValueError("username cannot be empty")
+        if not password or len(password) < 4:
+            raise ValueError("password must be at least 4 characters")
+        if role not in {"admin", "operator", "viewer"}:
+            role = "operator"
+
+        pwd_hash, salt = self.hash_password(password)
+        now = self._timestamp()
+        with self._lock, self._connection:
+            cursor = self._connection.execute(
+                """
+                INSERT INTO users (username, password_hash, salt, role, display_name, email, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (uname, pwd_hash, salt, role, display_name or username, email, now),
+            )
+            user_id = cursor.lastrowid
+        return {
+            "id": user_id,
+            "username": uname,
+            "role": role,
+            "display_name": display_name or username,
+            "email": email,
+            "created_at": now,
+        }
+
+    def authenticate_user(self, username: str, password: str) -> dict[str, Any] | None:
+        """Verify username and password against stored PBKDF2 hash."""
+        uname = username.strip().lower()
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT id, username, password_hash, salt, role, display_name, email FROM users WHERE username = ?",
+                (uname,),
+            ).fetchone()
+        if not row:
+            return None
+
+        pwd_hash, _ = self.hash_password(password, row["salt"])
+        if not hmac.compare_digest(row["password_hash"], pwd_hash):
+            return None
+
+        now = self._timestamp()
+        with self._lock, self._connection:
+            self._connection.execute(
+                "UPDATE users SET last_login = ? WHERE id = ?", (now, row["id"])
+            )
+
+        return {
+            "id": row["id"],
+            "username": row["username"],
+            "role": row["role"],
+            "display_name": row["display_name"],
+            "email": row["email"],
+            "last_login": now,
+        }
+
+    def create_session(self, user_id: int, duration_hours: int = 24) -> str:
+        """Generate a cryptographically secure session token."""
+        token = secrets.token_hex(32)
+        created_at = datetime.now(timezone.utc)
+        expires_at = created_at + timedelta(hours=duration_hours)
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO sessions (token, user_id, created_at, expires_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    token,
+                    user_id,
+                    created_at.isoformat(timespec="seconds"),
+                    expires_at.isoformat(timespec="seconds"),
+                ),
+            )
+        return token
+
+    def validate_session(self, token: str) -> dict[str, Any] | None:
+        """Validate an active session token and return the associated user."""
+        if not token:
+            return None
+        now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT s.token, s.expires_at, u.id, u.username, u.role, u.display_name, u.email
+                FROM sessions s
+                JOIN users u ON s.user_id = u.id
+                WHERE s.token = ?
+                """,
+                (token,),
+            ).fetchone()
+
+        if not row:
+            return None
+
+        if row["expires_at"] < now_iso:
+            with self._lock, self._connection:
+                self._connection.execute("DELETE FROM sessions WHERE token = ?", (token,))
+            return None
+
+        return {
+            "id": row["id"],
+            "username": row["username"],
+            "role": row["role"],
+            "display_name": row["display_name"],
+            "email": row["email"],
+        }
+
+    def delete_session(self, token: str) -> None:
+        """Invalidate a session on logout."""
+        with self._lock, self._connection:
+            self._connection.execute("DELETE FROM sessions WHERE token = ?", (token,))
+
+    def count_users(self) -> int:
+        """Return the number of registered user accounts."""
+        with self._lock:
+            return int(self._connection.execute("SELECT COUNT(*) FROM users").fetchone()[0])
+
+    def list_users(self) -> list[dict[str, Any]]:
+        """Return all registered user accounts without password hashes or salts."""
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT id, username, role, display_name, email, created_at, last_login FROM users ORDER BY id ASC"
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def change_password(self, user_id: int, old_password: str, new_password: str) -> bool:
+        """Verify old password and update with newly hashed password."""
+        if not new_password or len(new_password) < 4:
+            raise ValueError("new password must be at least 4 characters")
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT password_hash, salt FROM users WHERE id = ?", (user_id,)
+            ).fetchone()
+        if not row:
+            return False
+
+        old_hash, _ = self.hash_password(old_password, row["salt"])
+        if not hmac.compare_digest(row["password_hash"], old_hash):
+            return False
+
+        new_hash, new_salt = self.hash_password(new_password)
+        with self._lock, self._connection:
+            self._connection.execute(
+                "UPDATE users SET password_hash = ?, salt = ? WHERE id = ?",
+                (new_hash, new_salt, user_id),
+            )
+        return True
 
     def __enter__(self) -> "NetworkDatabase":
         return self

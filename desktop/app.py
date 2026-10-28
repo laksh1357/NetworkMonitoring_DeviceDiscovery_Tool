@@ -57,6 +57,36 @@ except ImportError:
     ARP = Ether = srp = None
 
 
+CSV_EXPORT_HEADERS = (
+    "Hostname", "IP Address", "MAC Address", "Vendor", "Status",
+    "Latency", "Open Ports", "Last Seen",
+)
+
+
+def display_device_status(status: str) -> str:
+    """Normalize stored and live status values for consistent UI decisions."""
+    normalized = str(status or "").strip().upper()
+    return {
+        "ONLINE": "Online",
+        "OFFLINE": "Offline",
+        "WARNING": "Warning",
+    }.get(normalized, "Unknown")
+
+
+def device_csv_row(device: Device, open_ports: list[object] | None = None) -> tuple[str, ...]:
+    """Build one CSV row matching CSV_EXPORT_HEADERS exactly."""
+    ports = open_ports or []
+    port_text = "; ".join(
+        item.as_text() if hasattr(item, "as_text") else str(item)
+        for item in sorted(ports, key=lambda item: getattr(item, "port", 0))
+    ) or "None discovered"
+    latency = f"{device.latency_ms:.1f} ms" if device.latency_ms is not None else "Unavailable"
+    return (
+        device.hostname, device.ip, device.mac, device.vendor,
+        display_device_status(device.status), latency, port_text, device.last_seen,
+    )
+
+
 def detect_local_subnet(interface: str = "auto") -> ipaddress.IPv4Network:
     """Detect the active IPv4 interface by opening a UDP socket route lookup."""
     if interface and interface != "auto" and hasattr(socket, "if_nametoindex"):
@@ -640,7 +670,7 @@ class NetworkMonitorApp(TkBase):
         self.detail_status_label = ctk.CTkLabel(self.detail_panel, textvariable=self.detail_status_var, font=ctk.CTkFont(size=11, weight="bold"), text_color="#31c48d")
         self.detail_status_label.pack(anchor="w", padx=18, pady=(5, 16))
         ctk.CTkLabel(self.detail_panel, textvariable=self.detail_info_var, font=ctk.CTkFont(size=11), text_color="#a6b3c7", justify="left", wraplength=245).pack(anchor="w", padx=18)
-        ctk.CTkButton(self.detail_panel, text="Check common ports", height=34, command=self._on_device_selected).pack(fill="x", padx=18, pady=(20, 8))
+        ctk.CTkButton(self.detail_panel, text="Check common ports", height=34, command=self._check_selected_device_ports).pack(fill="x", padx=18, pady=(20, 8))
         ctk.CTkLabel(self.detail_panel, textvariable=self.port_status_var, font=ctk.CTkFont(size=10), text_color="#8190a8", justify="left", wraplength=245).pack(anchor="w", padx=18)
         ctk.CTkLabel(self.detail_panel, text="RECENT ACTIVITY", font=ctk.CTkFont(size=10, weight="bold"), text_color="#8190a8").pack(anchor="w", padx=18, pady=(24, 8))
         ctk.CTkLabel(self.detail_panel, textvariable=self.activity_var, font=ctk.CTkFont(size=10), text_color="#a6b3c7", justify="left", wraplength=245).pack(anchor="w", padx=18)
@@ -1026,14 +1056,7 @@ class NetworkMonitorApp(TkBase):
         self.status_var.set(f"Selected topology node: {ip}")
 
     def _device_status(self, device: Device) -> str:
-        status = device.status.upper()
-        if status == "ONLINE":
-            return "Online"
-        if status == "OFFLINE":
-            return "Offline"
-        if status == "WARNING":
-            return "Warning"
-        return "Unknown"
+        return display_device_status(device.status)
 
     def _update_summary_cards(self) -> None:
         devices = list(self.devices.values())
@@ -1124,6 +1147,10 @@ class NetworkMonitorApp(TkBase):
     def _refresh_table(self) -> None:
         if not hasattr(self, "tree"):
             return
+        # Rebuilding the Treeview used to discard the user's selection. That made
+        # the details panel show "No device selected" after each scan refresh.
+        previous_selection = self.tree.selection()
+        selected_ip = previous_selection[0] if previous_selection else None
         for item in self.tree.get_children():
             self.tree.delete(item)
         devices = self._filtered_devices()
@@ -1143,6 +1170,10 @@ class NetworkMonitorApp(TkBase):
                 "Inspect",
             )
             self.tree.insert("", "end", iid=device.ip, values=values, tags=(self._device_status(device).lower(),))
+        if selected_ip and any(device.ip == selected_ip for device in devices):
+            self.tree.selection_set(selected_ip)
+            self.tree.focus(selected_ip)
+            self.tree.see(selected_ip)
         if devices:
             self.empty_state.place_forget()
         else:
@@ -1336,14 +1367,25 @@ class NetworkMonitorApp(TkBase):
         self.after(100, self._process_events)
 
     def _on_device_selected(self, _event: object | None = None) -> None:
+        """Update the details panel when a row is selected; do not scan yet."""
         selection = self.tree.selection()
         if not selection:
             self._show_device_details(None)
             return
+        self._show_device_details(self.devices.get(selection[0]))
+
+    def _check_selected_device_ports(self) -> None:
+        """Run a bounded common-port scan for the currently selected online host."""
+        selection = self.tree.selection()
+        if not selection:
+            self.port_status_var.set("Select a device row first, then check common ports.")
+            return
         ip = selection[0]
         device = self.devices.get(ip)
         self._show_device_details(device)
-        if device is None or device.status != "Online":
+        # Normalize the status the same way the UI does. Persisted values may be
+        # 'ONLINE' while freshly discovered values are 'Online'.
+        if device is None or self._device_status(device) != "Online":
             self.port_status_var.set(f"{ip}: Port checks are available for online devices only")
             return
         if self.port_scan_thread is not None and self.port_scan_thread.is_alive():
@@ -1441,10 +1483,14 @@ class NetworkMonitorApp(TkBase):
         if not filename:
             return
         try:
-            with Path(filename).open("w", newline="", encoding="utf-8") as file:
+            # Export data columns, not the UI-only "Actions" column. Keep each
+            # row in exactly the same order as the header and include discovered
+            # open ports when available.
+            with Path(filename).open("w", newline="", encoding="utf-8-sig") as file:
                 writer = csv.writer(file)
-                writer.writerow(self.headings)
-                writer.writerows(device.as_row() for device in self.devices.values())
+                writer.writerow(CSV_EXPORT_HEADERS)
+                for device in sorted(self.devices.values(), key=lambda item: ipaddress.ip_address(item.ip)):
+                    writer.writerow(device_csv_row(device, self.open_ports.get(device.ip, [])))
             self.status_var.set(f"Exported {len(self.devices)} device records")
         except OSError as exc:
             messagebox.showerror("Export failed", str(exc))

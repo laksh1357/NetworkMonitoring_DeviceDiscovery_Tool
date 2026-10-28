@@ -8,3 +8,5 @@ network_logs.db-wal
 network_logs.db-shm
 *.db
 *.db-*
+.vercel
+.env*

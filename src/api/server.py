@@ -18,12 +18,15 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-import psutil
+try:
+    import psutil
+except ImportError:
+    psutil = None
 
 from src.api.validation import parse_private_ipv4_address, parse_private_scan_subnet
 from src.core.database import NetworkDatabase
 from src.core.models import Device, ScanJobState
-from src.discovery.scanner import NetworkScanner, detect_local_subnet
+from src.discovery.scanner import NetworkScanner, detect_local_subnet, ping_host
 from src.discovery.port_scanner import scan_ports
 from src.identity import IdentityVerificationService, NetworkObservation
 from src.security.auth import AdminAuthenticator
@@ -75,6 +78,8 @@ honeypot_listeners = HoneypotListeners(
     _record_honeypot_connection,
 )
 
+AUTH_ENABLED = os.environ.get("AUTH_ENABLED", "true").lower() in ("true", "1", "yes")
+
 scan_state = {
     "running": False,
     "done": 0,
@@ -124,9 +129,60 @@ class NOCRequestHandler(SimpleHTTPRequestHandler):
         morsel = cookie.get("lan_watchtower_session")
         return morsel.value if morsel else None
 
+    def _get_session_token(self) -> str:
+        auth_header = self.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            return auth_header[7:].strip()
+        cookie_token = self._session_token()
+        if cookie_token:
+            return cookie_token
+        if "Cookie" in self.headers:
+            cookies = self.headers.get("Cookie", "").split(";")
+            for c in cookies:
+                if "=" in c:
+                    k, v = c.strip().split("=", 1)
+                    if k.strip() in ("session", "token", "lan_watchtower_session"):
+                        return v.strip()
+        return ""
+
+    def _get_current_user(self) -> dict[str, Any] | None:
+        if not AUTH_ENABLED:
+            return {
+                "id": 1,
+                "username": "admin",
+                "role": "admin",
+                "display_name": "Admin User",
+                "email": "admin@network.local",
+            }
+        token = self._get_session_token()
+        if not token:
+            return None
+        user = database.validate_session(token)
+        if user:
+            return user
+        if authenticator.is_authenticated(token):
+            return {
+                "id": 1,
+                "username": "admin",
+                "role": "admin",
+                "display_name": "Admin Authenticator",
+                "email": "admin@network.local",
+            }
+        return None
+
     def _require_session(self, *, require_csrf: bool = False) -> bool:
+        auth_header = self.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            bearer_token = auth_header[7:].strip()
+            user = database.validate_session(bearer_token)
+            if user:
+                return True
+
         token = self._session_token()
         if not authenticator.is_authenticated(token):
+            user = self._get_current_user()
+            if user:
+                return True
             message = (
                 "Set LAN_WATCHTOWER_ADMIN_PASSWORD to enable authenticated administration"
                 if not authenticator.configured
@@ -178,13 +234,35 @@ class NOCRequestHandler(SimpleHTTPRequestHandler):
 
         if path == "/api/auth/status":
             session_token = self._session_token()
+            user = self._get_current_user()
             self._send_json({
-                "configured": authenticator.configured,
-                "authenticated": authenticator.is_authenticated(session_token),
-                "csrf_token": authenticator.csrf_token(session_token),
+                "configured": authenticator.configured or database.count_users() > 0,
+                "authenticated": user is not None or authenticator.is_authenticated(session_token),
+                "csrf_token": authenticator.csrf_token(session_token) if session_token else None,
                 "challenge_ttl_seconds": authenticator.challenge_ttl,
                 "session_ttl_seconds": authenticator.session_ttl,
+                "user": user,
             })
+            return
+
+        if path == "/api/auth/me":
+            user = self._get_current_user()
+            if not user:
+                self._send_json({"authenticated": False})
+                return
+            self._send_json({"authenticated": True, "user": user})
+            return
+
+        if path == "/api/auth/setup-status":
+            self._send_json({"has_users": database.count_users() > 0})
+            return
+
+        if path == "/api/auth/users":
+            user = self._get_current_user()
+            if not user or user.get("role") != "admin":
+                self._send_error_json("Administrator privileges required", code=403)
+                return
+            self._send_json({"users": database.list_users()})
             return
 
         if path.startswith("/api/") and not self._require_session():
@@ -205,7 +283,7 @@ class NOCRequestHandler(SimpleHTTPRequestHandler):
         if path == "/api/security/storage":
             try:
                 self._send_json(storage_telemetry.snapshot())
-            except (OSError, psutil.Error) as exc:
+            except Exception as exc:
                 self._send_error_json(f"Storage telemetry failed: {exc}", code=503)
             return
 
@@ -469,14 +547,39 @@ class NOCRequestHandler(SimpleHTTPRequestHandler):
             )
             return
 
-        if path == "/api/auth/logout":
-            if not self._require_session(require_csrf=True):
+        if path == "/api/auth/login":
+            username = str(body.get("username", "")).strip()
+            password = str(body.get("password", ""))
+            if not username or not password:
+                self._send_error_json("Username and password are required", code=400)
                 return
+            user = database.authenticate_user(username, password)
+            if not user:
+                self._send_error_json("Invalid username or password", code=401)
+                return
+            token = database.create_session(user["id"])
+            database.insert_activity_log(
+                user["display_name"],
+                "USER_LOGIN",
+                f"User {user['username']} logged in successfully",
+            )
+            self._send_json({
+                "message": "Login successful",
+                "token": token,
+                "user": user,
+            })
+            return
+
+        if path == "/api/auth/logout":
+            token = self._get_session_token()
+            if token:
+                database.delete_session(token)
             session_token = self._session_token()
+            if session_token:
+                authenticator.logout(session_token)
             database.append_audit_event("admin", "ADMIN_LOGOUT", {"client_ip": self.client_address[0]})
-            authenticator.logout(session_token)
             self._send_json(
-                {"authenticated": False},
+                {"authenticated": False, "message": "Logged out successfully"},
                 headers={
                     "Set-Cookie": (
                         "lan_watchtower_session=; Path=/; Max-Age=0; "
@@ -484,6 +587,58 @@ class NOCRequestHandler(SimpleHTTPRequestHandler):
                     )
                 },
             )
+            return
+
+        if path == "/api/auth/register":
+            has_users = database.count_users() > 0
+            current_user = self._get_current_user()
+            if has_users and (not current_user or current_user.get("role") != "admin"):
+                self._send_error_json("Administrator privileges required to register new users", code=403)
+                return
+            username = str(body.get("username", "")).strip()
+            password = str(body.get("password", ""))
+            display_name = str(body.get("display_name", ""))
+            role = str(body.get("role", "operator" if has_users else "admin"))
+            email = str(body.get("email", ""))
+            try:
+                new_user = database.create_user(
+                    username, password, role=role, display_name=display_name, email=email
+                )
+                token = database.create_session(new_user["id"])
+                database.insert_activity_log(
+                    new_user["display_name"],
+                    "USER_REGISTER",
+                    f"User {new_user['username']} created ({new_user['role']})",
+                )
+                self._send_json({
+                    "message": "Registration successful",
+                    "token": token,
+                    "user": new_user,
+                }, code=201)
+            except Exception as exc:
+                self._send_error_json(str(exc), code=400)
+            return
+
+        if path == "/api/auth/change-password":
+            user = self._get_current_user()
+            if not user:
+                self._send_error_json("Authentication required", code=401)
+                return
+            old_password = str(body.get("old_password", ""))
+            new_password = str(body.get("new_password", ""))
+            try:
+                success = database.change_password(user["id"], old_password, new_password)
+                if not success:
+                    self._send_error_json("Incorrect current password", code=400)
+                    return
+                database.insert_activity_log(
+                    user["display_name"],
+                    "PASSWORD_CHANGE",
+                    "User updated account password",
+                )
+                self._send_json({"message": "Password updated successfully"})
+            except Exception as exc:
+                self._send_error_json(str(exc), code=400)
             return
 
         if path.startswith("/api/") and not self._require_session(require_csrf=True):
@@ -750,8 +905,6 @@ class NOCRequestHandler(SimpleHTTPRequestHandler):
             except ValueError as exc:
                 self._send_error_json(str(exc))
                 return
-            from src.core.models import Device
-            from src.discovery.scanner import ping_host
             success, latency = ping_host(ip, timeout=1.5)
             if success and ip in in_memory_devices:
                 in_memory_devices[ip].status = "Online"
@@ -801,16 +954,25 @@ class NOCRequestHandler(SimpleHTTPRequestHandler):
 
 def run_server(port: int = 8000, open_browser: bool = True) -> HTTPServer:
     host = os.environ.get("API_HOST", "127.0.0.1")
-    httpd = HTTPServer((host, port), NOCRequestHandler)
+    actual_port = port
+    try:
+        httpd = HTTPServer((host, actual_port), NOCRequestHandler)
+    except OSError as err:
+        if getattr(err, "errno", None) == 48 and actual_port == 8000:
+            actual_port = 8080
+            print(f"Port 8000 already in use, binding to fallback port {actual_port} instead...")
+            httpd = HTTPServer((host, actual_port), NOCRequestHandler)
+        else:
+            raise
     try:
         honeypot_listeners.start()
     except OSError:
         httpd.server_close()
         raise
-    print(f"LAN Watchtower dashboard and API running at http://{host}:{port}")
+    print(f"LAN Watchtower dashboard and API running at http://{host}:{actual_port}")
 
     if open_browser:
-        threading.Thread(target=lambda: (time.sleep(1.0), webbrowser.open(f"http://127.0.0.1:{port}")), daemon=True).start()
+        threading.Thread(target=lambda: (time.sleep(1.0), webbrowser.open(f"http://127.0.0.1:{actual_port}")), daemon=True).start()
 
     return httpd
 

@@ -34,6 +34,10 @@ class Device:
     interface: str = "auto"
     fingerprint: str | None = None
     open_ports: tuple[int, ...] = ()
+    device_type: str = "Unknown"
+    custom_name: str = ""
+    notes: str = ""
+    location: str = "Main Network"
 
     def as_row(self) -> tuple[str, str, str, str, str, str, str]:
         latency = f"{self.latency_ms:.1f} ms" if self.latency_ms is not None else "-"
